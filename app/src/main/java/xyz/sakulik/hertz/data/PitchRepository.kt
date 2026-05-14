@@ -15,12 +15,20 @@ import kotlinx.coroutines.launch
 import kotlin.math.log2
 import kotlin.math.roundToInt
 
+/** YIN 置信度阈值：低于此值的帧视为噪声，不触发音高事件 */
+private const val CONFIDENCE_THRESHOLD = 0.85f
+
+/** 人声可用频率范围（Hz）。低音炮约 80Hz，女高音约 1100Hz */
+private const val VOCAL_FREQ_MIN = 80f
+private const val VOCAL_FREQ_MAX = 1100f
+
 sealed class PitchResult {
     data class Detected(
         val frequencyHz: Float,
         val noteName: String,
         val octave: Int,
-        val centsDeviation: Float
+        val centsDeviation: Float,
+        val probability: Float
     ) : PitchResult()
 
     data object Silence : PitchResult()
@@ -43,10 +51,13 @@ class PitchRepository {
         dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(44100, 4096, 3072)
 
         val pitchHandler = PitchDetectionHandler { result, _ ->
-            val isPitched = result.isPitched
+            val probability = result.probability
             val freq = result.pitch
 
-            if (isPitched && freq in 70f..1400f) {
+            if (result.isPitched
+                && probability >= CONFIDENCE_THRESHOLD
+                && freq in VOCAL_FREQ_MIN..VOCAL_FREQ_MAX
+            ) {
                 val midiNumber = 12 * log2(freq / 440.0) + 69
                 val roundedMidi = midiNumber.roundToInt()
 
@@ -60,7 +71,8 @@ class PitchRepository {
                         frequencyHz = freq,
                         noteName = noteName,
                         octave = octave,
-                        centsDeviation = centsDeviation
+                        centsDeviation = centsDeviation,
+                        probability = probability
                     )
                 )
             } else {

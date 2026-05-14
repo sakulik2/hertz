@@ -16,6 +16,14 @@ import xyz.sakulik.hertz.data.PitchResult
 import kotlin.math.log2
 import kotlin.math.roundToInt
 
+/** 极值候选人：用于连续帧计数防抖 */
+private data class ExtremeCandidate(
+    val midiNote: Int,
+    val freq: Float,
+    val noteName: String,
+    val streak: Int
+)
+
 data class VocalRangeState(
     val lowestFreq: Float? = null,
     val lowestNote: String? = null,
@@ -43,7 +51,14 @@ class PitchViewModel(
 
     private var collectJob: Job? = null
 
+    // 极值防抖候选状态（不放入 UiState，不需要触发重组）
+    private var lowestCandidate: ExtremeCandidate? = null
+    private var highestCandidate: ExtremeCandidate? = null
+
     companion object {
+        /** 连续出现 N 帧后才修改音域边界。帧间隔≈ 23ms，3 帧 ≈ 70ms */
+        private const val EXTREMUM_STREAK_THRESHOLD = 3
+
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer { PitchViewModel() }
         }
@@ -62,31 +77,66 @@ class PitchViewModel(
 
                     when (result) {
                         is PitchResult.Detected -> {
+                            // streak 计数在 _uiState.update 外部修改，避免在 lambda 内操作可变状态
+                            val freq = result.frequencyHz
+                            val fullNoteName = "${result.noteName}${result.octave}"
+                            val currentMidi = (12 * log2(freq.toDouble() / 440.0) + 69).roundToInt()
+
                             _uiState.update { state ->
                                 val newCents = result.centsDeviation
                                 val smoothed = state.smoothedCents * 0.7f + newCents * 0.3f
-
                                 val currentRange = state.vocalRange
-                                val freq = result.frequencyHz
-                                val fullNoteName = "${result.noteName}${result.octave}"
 
+                                // --- 最低音防扖 ---
                                 var newLowestFreq = currentRange.lowestFreq
                                 var newLowestNote = currentRange.lowestNote
-                                if (newLowestFreq == null || freq < newLowestFreq) {
-                                    newLowestFreq = freq
-                                    newLowestNote = fullNoteName
+                                if (currentRange.lowestFreq == null || freq < currentRange.lowestFreq) {
+                                    val c = lowestCandidate
+                                    when {
+                                        c != null && c.midiNote == currentMidi -> {
+                                            val newStreak = c.streak + 1
+                                            lowestCandidate = c.copy(streak = newStreak)
+                                            if (newStreak >= EXTREMUM_STREAK_THRESHOLD) {
+                                                newLowestFreq = c.freq
+                                                newLowestNote = c.noteName
+                                            }
+                                        }
+                                        c == null || freq < c.freq -> {
+                                            lowestCandidate = ExtremeCandidate(currentMidi, freq, fullNoteName, 1)
+                                        }
+                                        // freq >= c.freq：没有当前候选更低，不动
+                                    }
+                                } else {
+                                    lowestCandidate = null // 不再是新低点，重置候选
                                 }
 
+                                // --- 最高音防扖 ---
                                 var newHighestFreq = currentRange.highestFreq
                                 var newHighestNote = currentRange.highestNote
-                                if (newHighestFreq == null || freq > newHighestFreq) {
-                                    newHighestFreq = freq
-                                    newHighestNote = fullNoteName
+                                if (currentRange.highestFreq == null || freq > currentRange.highestFreq) {
+                                    val c = highestCandidate
+                                    when {
+                                        c != null && c.midiNote == currentMidi -> {
+                                            val newStreak = c.streak + 1
+                                            highestCandidate = c.copy(streak = newStreak)
+                                            if (newStreak >= EXTREMUM_STREAK_THRESHOLD) {
+                                                newHighestFreq = c.freq
+                                                newHighestNote = c.noteName
+                                            }
+                                        }
+                                        c == null || freq > c.freq -> {
+                                            highestCandidate = ExtremeCandidate(currentMidi, freq, fullNoteName, 1)
+                                        }
+                                    }
+                                } else {
+                                    highestCandidate = null
                                 }
 
-                                val lowMidi = (12 * log2(newLowestFreq / 440.0) + 69).roundToInt()
-                                val highMidi = (12 * log2(newHighestFreq / 440.0) + 69).roundToInt()
-                                val rangeInSemitones = highMidi - lowMidi
+                                val rangeInSemitones = if (newLowestFreq != null && newHighestFreq != null) {
+                                    val lowMidi = (12 * log2(newLowestFreq.toDouble() / 440.0) + 69).roundToInt()
+                                    val highMidi = (12 * log2(newHighestFreq.toDouble() / 440.0) + 69).roundToInt()
+                                    highMidi - lowMidi
+                                } else 0
 
                                 state.copy(
                                     currentNote = result.noteName,
@@ -127,6 +177,8 @@ class PitchViewModel(
     }
 
     fun resetRange() {
+        lowestCandidate = null
+        highestCandidate = null
         _uiState.update { it.copy(vocalRange = VocalRangeState(), centsDeviation = 0f, smoothedCents = 0f) }
     }
 

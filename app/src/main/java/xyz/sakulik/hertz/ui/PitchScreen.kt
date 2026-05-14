@@ -28,6 +28,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -48,10 +51,21 @@ import kotlin.math.sin
 fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.Factory)) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // 进入屏幕自动开始监听，离开屏幕自动停止
-    DisposableEffect(Unit) {
-        viewModel.startListening()
-        onDispose { viewModel.stopListening() }
+    // 生命周期感知：退到后台自动暂停，回到前台自动恢复
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> viewModel.startListening()
+                Lifecycle.Event.ON_PAUSE  -> viewModel.stopListening()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.stopListening()
+        }
     }
 
     Column(
