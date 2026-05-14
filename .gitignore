@@ -8,6 +8,7 @@ local.properties
 
 # Android Studio / IntelliJ IDEA
 .idea/
+.vscode/
 *.iml
 *.iws
 *.ipr
