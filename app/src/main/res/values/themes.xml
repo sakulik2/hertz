@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Compose 只需要一个"壳"主题。
+        - 继承 Material.Light.NoActionBar 避免 ActionBar 与 Compose TopAppBar 冲突
+        - windowBackground 设为黑色，防止 Compose Surface 渲染前的白色闪烁
+        - statusBarColor / navigationBarColor 设为透明，由 Compose 自行管理
+        - windowLightStatusBar = false，让状态栏图标在深色背景下可见
+    -->
+    <style name="Theme.Hertz" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

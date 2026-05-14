@@ -1,7 +1,10 @@
 package xyz.sakulik.hertz.ui
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,17 +34,19 @@ data class UiState(
     val smoothedCents: Float = 0f
 )
 
-class PitchViewModel : ViewModel() {
-
-    private val repository: PitchRepository
+class PitchViewModel(
+    private val repository: PitchRepository = PitchRepository()
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private var collectJob: Job? = null
 
-    init {
-        repository = PitchRepository()
+    companion object {
+        val Factory: ViewModelProvider.Factory = viewModelFactory {
+            initializer { PitchViewModel() }
+        }
     }
 
     fun startListening() {
@@ -104,7 +109,9 @@ class PitchViewModel : ViewModel() {
                                 state.copy(
                                     currentNote = null,
                                     currentOctave = null,
-                                    currentFrequency = null
+                                    currentFrequency = null,
+                                    centsDeviation = 0f,
+                                    smoothedCents = 0f
                                 )
                             }
                         }
@@ -120,7 +127,7 @@ class PitchViewModel : ViewModel() {
     }
 
     fun resetRange() {
-        _uiState.update { it.copy(vocalRange = VocalRangeState()) }
+        _uiState.update { it.copy(vocalRange = VocalRangeState(), centsDeviation = 0f, smoothedCents = 0f) }
     }
 
     override fun onCleared() {

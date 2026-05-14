@@ -16,7 +16,14 @@ public class AndroidAudioInputStream implements TarsosDSPAudioInputStream {
 
     @Override
     public long skip(long bytesToSkip) throws IOException {
-        throw new RuntimeException("No skip supported on Android audio stream.");
+        long skipped = 0;
+        byte[] buffer = new byte[(int) bytesToSkip];
+        while (skipped < bytesToSkip) {
+            int read = audioRecord.read(buffer, 0, (int) (bytesToSkip - skipped));
+            if (read < 0) break;
+            skipped += read;
+        }
+        return skipped;
     }
 
     @Override

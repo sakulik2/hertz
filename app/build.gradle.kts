@@ -73,7 +73,7 @@ dependencies {
 
     // TarsosDSP and slf4j
     implementation("be.tarsos.dsp:core:2.5")
-    implementation("org.slf4j:slf4j-simple:2.0.13")
+    implementation("org.slf4j:slf4j-nop:2.0.13")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

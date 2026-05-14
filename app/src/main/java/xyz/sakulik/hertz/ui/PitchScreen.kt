@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,8 +45,14 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 @Composable
-fun PitchScreen(viewModel: PitchViewModel = viewModel()) {
+fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.Factory)) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // 进入屏幕自动开始监听，离开屏幕自动停止
+    DisposableEffect(Unit) {
+        viewModel.startListening()
+        onDispose { viewModel.stopListening() }
+    }
 
     Column(
         modifier = Modifier
@@ -89,7 +96,7 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel()) {
                     style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
                 )
 
-                val angleDegrees = 270f + (animatedSmoothedCents / 50f).coerceIn(-1.5f, 1.5f) * 60f
+                val angleDegrees = 270f + (animatedSmoothedCents / 50f).coerceIn(-1f, 1f) * 60f
                 val angleRadians = angleDegrees * PI / 180.0
                 val endX = arcCenter.x + radius * cos(angleRadians).toFloat()
                 val endY = arcCenter.y + radius * sin(angleRadians).toFloat()

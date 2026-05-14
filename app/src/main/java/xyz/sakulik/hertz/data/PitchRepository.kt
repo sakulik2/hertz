@@ -7,7 +7,6 @@ import be.tarsos.dsp.pitch.PitchProcessor
 import be.tarsos.dsp.pitch.PitchProcessor.PitchEstimationAlgorithm
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -29,7 +28,7 @@ sealed class PitchResult {
 
 class PitchRepository {
 
-    private val pitchChannel = Channel<PitchResult>(Channel.CONFLATED)
+    private val pitchChannel = Channel<PitchResult>(capacity = 8)
     val pitchFlow: Flow<PitchResult> = pitchChannel.receiveAsFlow()
 
     private var dispatcher: AudioDispatcher? = null
@@ -40,7 +39,7 @@ class PitchRepository {
     fun startListening() {
         if (dispatcher != null) return
 
-        scope = CoroutineScope(Dispatchers.IO + Job())
+        scope = CoroutineScope(Dispatchers.IO)
         dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(44100, 4096, 3072)
 
         val pitchHandler = PitchDetectionHandler { result, _ ->
@@ -72,10 +71,8 @@ class PitchRepository {
         val pitchProcessor = PitchProcessor(PitchEstimationAlgorithm.YIN, 44100f, 4096, pitchHandler)
         dispatcher?.addAudioProcessor(pitchProcessor)
 
-        scope?.launch {
-            Thread {
-                dispatcher?.run()
-            }.start()
+        scope?.launch(Dispatchers.IO) {
+            dispatcher?.run()
         }
     }
 
