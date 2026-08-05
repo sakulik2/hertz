@@ -39,7 +39,8 @@ data class UiState(
     val centsDeviation: Float = 0f,
     val isListening: Boolean = false,
     val vocalRange: VocalRangeState = VocalRangeState(),
-    val smoothedCents: Float = 0f
+    val smoothedCents: Float = 0f,
+    val hasError: Boolean = false
 )
 
 class PitchViewModel(
@@ -51,12 +52,15 @@ class PitchViewModel(
 
     private var collectJob: Job? = null
 
-    // 极值防抖候选状态（不放入 UiState，不需要触发重组）
+    // 极值防抖候选状态
     private var lowestCandidate: ExtremeCandidate? = null
     private var highestCandidate: ExtremeCandidate? = null
 
+    // 追踪用户显式手动的暂停操作
+    private var userManuallyPaused: Boolean = false
+
     companion object {
-        /** 连续出现 N 帧后才修改音域边界。帧间隔≈ 23ms，3 帧 ≈ 70ms */
+        /** 连续出现 N 帧后才修改音域边界。帧间隔 ≈ 23ms，3 帧 ≈ 70ms */
         private const val EXTREMUM_STREAK_THRESHOLD = 3
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {
@@ -64,11 +68,14 @@ class PitchViewModel(
         }
     }
 
-    fun startListening() {
+    fun startListening(isUserAction: Boolean = false) {
+        if (isUserAction) {
+            userManuallyPaused = false
+        }
         if (_uiState.value.isListening) return
 
         repository.startListening()
-        _uiState.update { it.copy(isListening = true) }
+        _uiState.update { it.copy(isListening = true, hasError = false) }
 
         if (collectJob == null || collectJob?.isCompleted == true) {
             collectJob = viewModelScope.launch {
@@ -77,7 +84,6 @@ class PitchViewModel(
 
                     when (result) {
                         is PitchResult.Detected -> {
-                            // streak 计数在 _uiState.update 外部修改，避免在 lambda 内操作可变状态
                             val freq = result.frequencyHz
                             val fullNoteName = "${result.noteName}${result.octave}"
                             val currentMidi = (12 * log2(freq.toDouble() / 440.0) + 69).roundToInt()
@@ -87,40 +93,41 @@ class PitchViewModel(
                                 val smoothed = state.smoothedCents * 0.7f + newCents * 0.3f
                                 val currentRange = state.vocalRange
 
-                                // --- 最低音防扖 ---
+                                // --- 最低音防抖 ---
                                 var newLowestFreq = currentRange.lowestFreq
                                 var newLowestNote = currentRange.lowestNote
                                 if (currentRange.lowestFreq == null || freq < currentRange.lowestFreq) {
                                     val c = lowestCandidate
                                     when {
                                         c != null && c.midiNote == currentMidi -> {
+                                            val updatedFreq = minOf(c.freq, freq)
                                             val newStreak = c.streak + 1
-                                            lowestCandidate = c.copy(streak = newStreak)
+                                            lowestCandidate = c.copy(freq = updatedFreq, streak = newStreak)
                                             if (newStreak >= EXTREMUM_STREAK_THRESHOLD) {
-                                                newLowestFreq = c.freq
+                                                newLowestFreq = updatedFreq
                                                 newLowestNote = c.noteName
                                             }
                                         }
                                         c == null || freq < c.freq -> {
                                             lowestCandidate = ExtremeCandidate(currentMidi, freq, fullNoteName, 1)
                                         }
-                                        // freq >= c.freq：没有当前候选更低，不动
                                     }
                                 } else {
-                                    lowestCandidate = null // 不再是新低点，重置候选
+                                    lowestCandidate = null
                                 }
 
-                                // --- 最高音防扖 ---
+                                // --- 最高音防抖 ---
                                 var newHighestFreq = currentRange.highestFreq
                                 var newHighestNote = currentRange.highestNote
                                 if (currentRange.highestFreq == null || freq > currentRange.highestFreq) {
                                     val c = highestCandidate
                                     when {
                                         c != null && c.midiNote == currentMidi -> {
+                                            val updatedFreq = maxOf(c.freq, freq)
                                             val newStreak = c.streak + 1
-                                            highestCandidate = c.copy(streak = newStreak)
+                                            highestCandidate = c.copy(freq = updatedFreq, streak = newStreak)
                                             if (newStreak >= EXTREMUM_STREAK_THRESHOLD) {
-                                                newHighestFreq = c.freq
+                                                newHighestFreq = updatedFreq
                                                 newHighestNote = c.noteName
                                             }
                                         }
@@ -135,7 +142,7 @@ class PitchViewModel(
                                 val rangeInSemitones = if (newLowestFreq != null && newHighestFreq != null) {
                                     val lowMidi = (12 * log2(newLowestFreq.toDouble() / 440.0) + 69).roundToInt()
                                     val highMidi = (12 * log2(newHighestFreq.toDouble() / 440.0) + 69).roundToInt()
-                                    highMidi - lowMidi
+                                    maxOf(0, highMidi - lowMidi)
                                 } else 0
 
                                 state.copy(
@@ -165,14 +172,31 @@ class PitchViewModel(
                                 )
                             }
                         }
+                        is PitchResult.Error -> {
+                            stopListening(isUserAction = false)
+                            _uiState.update { state ->
+                                state.copy(hasError = true)
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    fun stopListening() {
+    fun resumeListeningFromLifecycle() {
+        if (!userManuallyPaused) {
+            startListening(isUserAction = false)
+        }
+    }
+
+    fun stopListening(isUserAction: Boolean = false) {
+        if (isUserAction) {
+            userManuallyPaused = true
+        }
         repository.stopListening()
+        collectJob?.cancel()
+        collectJob = null
         _uiState.update { it.copy(isListening = false) }
     }
 
@@ -184,6 +208,6 @@ class PitchViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        stopListening()
+        stopListening(isUserAction = false)
     }
 }

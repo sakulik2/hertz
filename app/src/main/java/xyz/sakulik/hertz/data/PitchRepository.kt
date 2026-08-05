@@ -8,6 +8,7 @@ import be.tarsos.dsp.pitch.PitchProcessor.PitchEstimationAlgorithm
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -32,11 +33,16 @@ sealed class PitchResult {
     ) : PitchResult()
 
     data object Silence : PitchResult()
+
+    data class Error(val exception: Throwable) : PitchResult()
 }
 
 class PitchRepository {
 
-    private val pitchChannel = Channel<PitchResult>(capacity = 8)
+    private val pitchChannel = Channel<PitchResult>(
+        capacity = 8,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
     val pitchFlow: Flow<PitchResult> = pitchChannel.receiveAsFlow()
 
     private var dispatcher: AudioDispatcher? = null
@@ -47,49 +53,64 @@ class PitchRepository {
     fun startListening() {
         if (dispatcher != null) return
 
-        scope = CoroutineScope(Dispatchers.IO)
-        dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(44100, 4096, 3072)
+        val newScope = CoroutineScope(Dispatchers.IO)
+        scope = newScope
 
-        val pitchHandler = PitchDetectionHandler { result, _ ->
-            val probability = result.probability
-            val freq = result.pitch
+        try {
+            val newDispatcher = AudioDispatcherFactory.fromDefaultMicrophone(44100, 4096, 3072)
+            dispatcher = newDispatcher
 
-            if (result.isPitched
-                && probability >= CONFIDENCE_THRESHOLD
-                && freq in VOCAL_FREQ_MIN..VOCAL_FREQ_MAX
-            ) {
-                val midiNumber = 12 * log2(freq / 440.0) + 69
-                val roundedMidi = midiNumber.roundToInt()
+            val pitchHandler = PitchDetectionHandler { result, _ ->
+                val probability = result.probability
+                val freq = result.pitch
 
-                val noteIndex = roundedMidi % 12
-                val noteName = noteNames[if (noteIndex >= 0) noteIndex else (noteIndex + 12) % 12]
-                val octave = roundedMidi / 12 - 1
-                val centsDeviation = ((midiNumber - roundedMidi) * 100).toFloat()
+                if (result.isPitched
+                    && probability >= CONFIDENCE_THRESHOLD
+                    && freq in VOCAL_FREQ_MIN..VOCAL_FREQ_MAX
+                ) {
+                    val midiNumber = 12 * log2(freq / 440.0) + 69
+                    val roundedMidi = midiNumber.roundToInt()
 
-                pitchChannel.trySend(
-                    PitchResult.Detected(
-                        frequencyHz = freq,
-                        noteName = noteName,
-                        octave = octave,
-                        centsDeviation = centsDeviation,
-                        probability = probability
+                    val noteIndex = roundedMidi % 12
+                    val noteName = noteNames[if (noteIndex >= 0) noteIndex else (noteIndex + 12) % 12]
+                    val octave = roundedMidi / 12 - 1
+                    val centsDeviation = ((midiNumber - roundedMidi) * 100).toFloat()
+
+                    pitchChannel.trySend(
+                        PitchResult.Detected(
+                            frequencyHz = freq,
+                            noteName = noteName,
+                            octave = octave,
+                            centsDeviation = centsDeviation,
+                            probability = probability
+                        )
                     )
-                )
-            } else {
-                pitchChannel.trySend(PitchResult.Silence)
+                } else {
+                    pitchChannel.trySend(PitchResult.Silence)
+                }
             }
-        }
 
-        val pitchProcessor = PitchProcessor(PitchEstimationAlgorithm.YIN, 44100f, 4096, pitchHandler)
-        dispatcher?.addAudioProcessor(pitchProcessor)
+            val pitchProcessor = PitchProcessor(PitchEstimationAlgorithm.YIN, 44100f, 4096, pitchHandler)
+            newDispatcher.addAudioProcessor(pitchProcessor)
 
-        scope?.launch(Dispatchers.IO) {
-            dispatcher?.run()
+            newScope.launch(Dispatchers.IO) {
+                try {
+                    newDispatcher.run()
+                } catch (e: Exception) {
+                    pitchChannel.trySend(PitchResult.Error(e))
+                }
+            }
+        } catch (e: Exception) {
+            stopListening()
+            pitchChannel.trySend(PitchResult.Error(e))
         }
     }
 
     fun stopListening() {
-        dispatcher?.stop()
+        try {
+            dispatcher?.stop()
+        } catch (_: Exception) {
+        }
         dispatcher = null
         scope?.cancel()
         scope = null

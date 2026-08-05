@@ -1,3 +1,17 @@
 <resources>
     <string name="app_name">Hertz</string>
+    <string name="permission_rationale">您之前拒绝了麦克风权限。应用需要此权限才能分析音高，请点击下方按钮授权；如果系统不再弹窗，请前往系统设置中手动开启。</string>
+    <string name="permission_request_msg">调音器需要麦克风权限来获取音频输入，请点击下方按钮授权。</string>
+    <string name="btn_grant_permission">去授权</string>
+    <string name="btn_request_permission">请求权限</string>
+    
+    <string name="label_lowest">最低音</string>
+    <string name="label_highest">最高音</string>
+    <string name="label_range">音域</string>
+    <string name="unit_semitones">%1$d 半音</string>
+    
+    <string name="btn_start">开始</string>
+    <string name="btn_pause">暂停</string>
+    <string name="btn_reset_range">重置音域</string>
+    <string name="mic_error_toast">麦克风初始化失败，请检查麦克风占用或设备硬件。</string>
 </resources>

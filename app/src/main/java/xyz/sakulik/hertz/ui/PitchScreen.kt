@@ -1,5 +1,6 @@
 package xyz.sakulik.hertz.ui
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -27,20 +28,24 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
+import xyz.sakulik.hertz.R
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
@@ -50,21 +55,32 @@ import kotlin.math.sin
 @Composable
 fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.Factory)) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
-    // 生命周期感知：退到后台自动暂停，回到前台自动恢复
+    // 生命周期感知：遵守用户手动选择，切前台时自动恢复
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> viewModel.startListening()
-                Lifecycle.Event.ON_PAUSE  -> viewModel.stopListening()
+                Lifecycle.Event.ON_RESUME -> viewModel.resumeListeningFromLifecycle()
+                Lifecycle.Event.ON_PAUSE  -> viewModel.stopListening(isUserAction = false)
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            viewModel.stopListening()
+            viewModel.stopListening(isUserAction = false)
+        }
+    }
+
+    LaunchedEffect(uiState.hasError) {
+        if (uiState.hasError) {
+            Toast.makeText(
+                context,
+                context.getString(R.string.mic_error_toast),
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -90,16 +106,20 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
             label = "pointerColorAnimation"
         )
 
+        // 仪表盘（半圆表盘与指针），独立控制高度与圆心，解决与音符文字的穿透冲突
         Box(
-            modifier = Modifier.size(240.dp),
-            contentAlignment = Alignment.TopCenter
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(150.dp),
+            contentAlignment = Alignment.BottomCenter
         ) {
             val trackColor = MaterialTheme.colorScheme.surfaceVariant
 
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val radius = size.width * 0.45f
-                val arcCenter = Offset(size.width / 2f, size.height)
+                val arcCenter = Offset(size.width / 2f, size.height - 12.dp.toPx())
+                val radius = size.height * 0.85f
 
+                // 绘制背景半圆弧轨迹（从 210° 扫过 120° 到 330°）
                 drawArc(
                     color = trackColor,
                     startAngle = 210f,
@@ -110,6 +130,7 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
                     style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
                 )
 
+                // 绘制音高偏差指示针
                 val angleDegrees = 270f + (animatedSmoothedCents / 50f).coerceIn(-1f, 1f) * 60f
                 val angleRadians = angleDegrees * PI / 180.0
                 val endX = arcCenter.x + radius * cos(angleRadians).toFloat()
@@ -123,30 +144,32 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
                     cap = StrokeCap.Round
                 )
             }
-
-            val noteText = if (uiState.currentNote != null && uiState.currentOctave != null) {
-                "${uiState.currentNote}${uiState.currentOctave}"
-            } else {
-                "--"
-            }
-
-            AnimatedContent(
-                targetState = noteText,
-                transitionSpec = {
-                    fadeIn(animationSpec = tween(150)) togetherWith fadeOut(animationSpec = tween(150))
-                },
-                label = "noteAnimation",
-                modifier = Modifier.padding(top = 24.dp)
-            ) { text ->
-                Text(
-                    text = text,
-                    fontSize = 64.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // 当前音符显示区域（独立于 Canvas，防止交叉遮挡）
+        val noteText = if (uiState.currentNote != null && uiState.currentOctave != null) {
+            "${uiState.currentNote}${uiState.currentOctave}"
+        } else {
+            "--"
+        }
+
+        AnimatedContent(
+            targetState = noteText,
+            transitionSpec = {
+                fadeIn(animationSpec = tween(150)) togetherWith fadeOut(animationSpec = tween(150))
+            },
+            label = "noteAnimation"
+        ) { text ->
+            Text(
+                text = text,
+                fontSize = 56.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         val freqText = uiState.currentFrequency?.let { String.format(Locale.US, "%.1f Hz", it) } ?: "-- Hz"
         Text(
@@ -157,6 +180,7 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
 
         Spacer(modifier = Modifier.height(32.dp))
 
+        // 音域统计卡片
         ElevatedCard(
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -169,22 +193,41 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
             ) {
                 val range = uiState.vocalRange
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "Lowest", style = MaterialTheme.typography.labelMedium)
-                    Text(text = range.lowestNote ?: "--", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = stringResource(R.string.label_lowest),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    Text(
+                        text = range.lowestNote ?: "--",
+                        style = MaterialTheme.typography.titleMedium
+                    )
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "Range", style = MaterialTheme.typography.labelMedium)
-                    Text(text = "${range.rangeInSemitones} semitones", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = stringResource(R.string.label_range),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    Text(
+                        text = stringResource(R.string.unit_semitones, range.rangeInSemitones),
+                        style = MaterialTheme.typography.titleMedium
+                    )
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "Highest", style = MaterialTheme.typography.labelMedium)
-                    Text(text = range.highestNote ?: "--", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = stringResource(R.string.label_highest),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    Text(
+                        text = range.highestNote ?: "--",
+                        style = MaterialTheme.typography.titleMedium
+                    )
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
 
+        // 控制按钮组件
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -192,21 +235,27 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
             FilledTonalButton(
                 onClick = {
                     if (uiState.isListening) {
-                        viewModel.stopListening()
+                        viewModel.stopListening(isUserAction = true)
                     } else {
-                        viewModel.startListening()
+                        viewModel.startListening(isUserAction = true)
                     }
                 },
                 modifier = Modifier.weight(1f)
             ) {
-                Text(if (uiState.isListening) "Pause" else "Start")
+                Text(
+                    text = if (uiState.isListening) {
+                        stringResource(R.string.btn_pause)
+                    } else {
+                        stringResource(R.string.btn_start)
+                    }
+                )
             }
 
             OutlinedButton(
                 onClick = { viewModel.resetRange() },
                 modifier = Modifier.weight(1f)
             ) {
-                Text("Reset Range")
+                Text(text = stringResource(R.string.btn_reset_range))
             }
         }
     }
