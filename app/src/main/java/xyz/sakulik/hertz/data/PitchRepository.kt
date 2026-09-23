@@ -13,8 +13,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import kotlin.math.log2
-import kotlin.math.roundToInt
 
 /** YIN 置信度阈值：低于此值的帧视为噪声，不触发音高事件 */
 private const val CONFIDENCE_THRESHOLD = 0.85f
@@ -37,21 +35,35 @@ sealed class PitchResult {
     data class Error(val exception: Throwable) : PitchResult()
 }
 
-class PitchRepository {
+/**
+ * 音高数据来源。抽成接口以便 [xyz.sakulik.hertz.ui.PitchViewModel] 在 JVM 单元测试中
+ * 使用假实现，而不必触碰真实的 AudioRecord。
+ */
+interface PitchSource {
+    val pitchFlow: Flow<PitchResult>
+    fun startListening()
+    fun stopListening()
+}
+
+class PitchRepository : PitchSource {
 
     private val pitchChannel = Channel<PitchResult>(
         capacity = 8,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
-    val pitchFlow: Flow<PitchResult> = pitchChannel.receiveAsFlow()
+    override val pitchFlow: Flow<PitchResult> = pitchChannel.receiveAsFlow()
 
     private var dispatcher: AudioDispatcher? = null
     private var scope: CoroutineScope? = null
 
-    private val noteNames = arrayOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
-
-    fun startListening() {
+    @Synchronized
+    override fun startListening() {
         if (dispatcher != null) return
+
+        // 丢弃上次暂停时残留在缓冲区里的帧，否则它们会被当成当前音高处理并污染音域统计
+        do {
+            val drained = pitchChannel.tryReceive()
+        } while (drained.isSuccess)
 
         val newScope = CoroutineScope(Dispatchers.IO)
         scope = newScope
@@ -68,20 +80,14 @@ class PitchRepository {
                     && probability >= CONFIDENCE_THRESHOLD
                     && freq in VOCAL_FREQ_MIN..VOCAL_FREQ_MAX
                 ) {
-                    val midiNumber = 12 * log2(freq / 440.0) + 69
-                    val roundedMidi = midiNumber.roundToInt()
-
-                    val noteIndex = roundedMidi % 12
-                    val noteName = noteNames[if (noteIndex >= 0) noteIndex else (noteIndex + 12) % 12]
-                    val octave = roundedMidi / 12 - 1
-                    val centsDeviation = ((midiNumber - roundedMidi) * 100).toFloat()
+                    val midi = PitchTracker.frequencyToMidi(freq)
 
                     pitchChannel.trySend(
                         PitchResult.Detected(
                             frequencyHz = freq,
-                            noteName = noteName,
-                            octave = octave,
-                            centsDeviation = centsDeviation,
+                            noteName = PitchTracker.noteNameFromMidi(midi),
+                            octave = PitchTracker.octaveFromMidi(midi),
+                            centsDeviation = PitchTracker.centsFromMidi(freq, midi),
                             probability = probability
                         )
                     )
@@ -106,13 +112,18 @@ class PitchRepository {
         }
     }
 
-    fun stopListening() {
-        try {
-            dispatcher?.stop()
-        } catch (_: Exception) {
-        }
+    @Synchronized
+    override fun stopListening() {
+        val activeDispatcher = dispatcher
         dispatcher = null
         scope?.cancel()
         scope = null
+        if (activeDispatcher != null) {
+            try {
+                activeDispatcher.stop()
+            } catch (_: Exception) {
+                // Dispatcher shutdown is best effort; its audio stream is closed by the dispatcher.
+            }
+        }
     }
 }
