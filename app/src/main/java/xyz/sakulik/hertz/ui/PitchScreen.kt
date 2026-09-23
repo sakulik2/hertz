@@ -1,6 +1,5 @@
 package xyz.sakulik.hertz.ui
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -28,7 +27,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -37,7 +35,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -55,7 +52,6 @@ import kotlin.math.sin
 @Composable
 fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.Factory)) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
 
     // 生命周期感知：遵守用户手动选择，切前台时自动恢复
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -74,16 +70,6 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
         }
     }
 
-    LaunchedEffect(uiState.hasError) {
-        if (uiState.hasError) {
-            Toast.makeText(
-                context,
-                context.getString(R.string.mic_error_toast),
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -91,6 +77,14 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        if (uiState.hasError) {
+            Text(text = stringResource(R.string.mic_error_title), style = MaterialTheme.typography.titleMedium)
+            Text(text = stringResource(R.string.mic_error_message), style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(onClick = { viewModel.startListening(isUserAction = true) }) {
+                Text(text = stringResource(R.string.btn_retry))
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
         val animatedSmoothedCents by animateFloatAsState(
             targetValue = uiState.smoothedCents,
             animationSpec = spring(stiffness = Spring.StiffnessMediumLow),

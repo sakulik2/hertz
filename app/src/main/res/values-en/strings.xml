@@ -1,17 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Hertz</string>
-    <string name="permission_rationale">Microphone permission was previously denied. Hertz needs this permission to analyze pitch. Please tap below to grant it, or enable it manually in system settings.</string>
-    <string name="permission_request_msg">Tuner requires microphone permission for audio input. Please tap below to grant authorization.</string>
+    <string name="permission_rationale">Microphone permission was previously denied. Hertz needs it to analyze pitch. Grant it below, or enable it in system settings if Android no longer shows a prompt.</string>
+    <string name="permission_request_msg">Hertz needs microphone permission for audio input. Grant permission to start tuning.</string>
     <string name="btn_grant_permission">Grant Permission</string>
     <string name="btn_request_permission">Request Permission</string>
-    
     <string name="label_lowest">Lowest</string>
     <string name="label_highest">Highest</string>
     <string name="label_range">Range</string>
     <string name="unit_semitones">%1$d semitones</string>
-    
     <string name="btn_start">Start</string>
     <string name="btn_pause">Pause</string>
     <string name="btn_reset_range">Reset Range</string>
-    <string name="mic_error_toast">Microphone initialization failed. Please check microphone availability.</string>
+    <string name="mic_error_title">Microphone unavailable</string>
+    <string name="mic_error_message">Check microphone permission and device availability, then try again.</string>
+    <string name="btn_retry">Retry</string>
 </resources>
