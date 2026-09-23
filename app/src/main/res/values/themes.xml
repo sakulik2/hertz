@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-        Compose 只需要一个"壳"主题。
+        Compose 只需要一个"壳"主题（亮色）。深色覆盖见 values-night/themes.xml。
         - 继承 Material.Light.NoActionBar 避免 ActionBar 与 Compose TopAppBar 冲突
-        - windowBackground 设为深色，防止 Compose Surface 渲染前的白色闪烁。
-          取值与 ui/theme/Color.kt 的 BackgroundDeep 一致，否则启动时有一帧色差
+        - windowBackground 防止 Compose Surface 渲染前的闪色。取值与
+          ui/theme/Color.kt 的 BackgroundLight 一致，否则启动时有一帧色差
         - statusBarColor / navigationBarColor 设为透明，由 Compose 自行管理
-        - windowLightStatusBar = false，让状态栏图标在深色背景下可见
-        这些承诺与 HertzTheme 的深色配色成对，改一边必须改另一边。
+        - windowLightStatusBar = true：浅背景需要深色状态栏图标才看得见
+        这些承诺与 HertzTheme 的亮色配色成对，改一边必须改另一边。
     -->
     <style name="Theme.Hertz" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/hertz_window_background</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

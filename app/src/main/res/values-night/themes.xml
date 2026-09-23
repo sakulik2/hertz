@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        深色覆盖。只改随主题变化的两项，其余继承 values/themes.xml。
+        - windowBackground 由 values-night/colors.xml 提供，与 BackgroundDeep 一致
+        - windowLightStatusBar = false：深背景需要浅色状态栏图标
+        与 HertzTheme 的深色配色成对，改一边必须改另一边。
+    -->
+    <style name="Theme.Hertz" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/hertz_window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

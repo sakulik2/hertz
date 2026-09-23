@@ -1,7 +1,9 @@
 package xyz.sakulik.hertz.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -9,32 +11,78 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 /*
- * 与 res/values/themes.xml 的成对契约（改一边就必须改另一边）：
- * themes.xml 承诺黑色 windowBackground 与浅色状态栏图标，所以这里必须是深色配色。
- * 只改一边会重新引入启动闪白，或让状态栏图标在深色背景上不可见。
- * 本 app 刻意只有深色主题，没有 values-night。
+ * 与 res/values/themes.xml 及 res/values-night/themes.xml 的成对契约
+ * （改一边就必须改另一边）：
+ *
+ * themes.xml 的 windowBackground 承诺启动时的底色，Compose 必须用同一个颜色，
+ * 否则第一帧会闪色。两侧的对应关系：
+ *   values/        → hertz_window_background = BackgroundLight，windowLightStatusBar = true
+ *   values-night/  → hertz_window_background = BackgroundDeep， windowLightStatusBar = false
+ *
+ * 状态栏图标方向也必须跟着走：浅背景要深色图标（windowLightStatusBar = true），
+ * 反之则相反，否则图标会与背景同色而看不见。
  */
 
-private val HertzColorScheme = darkColorScheme(
+private val HertzDarkColorScheme = darkColorScheme(
     primary = SignalCyan,
     onPrimary = BackgroundDeep,
     primaryContainer = SignalCyanDim,
     onPrimaryContainer = SignalCyan,
     secondary = InstrumentBlue,
     onSecondary = BackgroundDeep,
+    secondaryContainer = SignalContainerDark,
+    onSecondaryContainer = SignalCyan,
+    tertiary = InstrumentBlue,
+    onTertiary = BackgroundDeep,
+    tertiaryContainer = SignalContainerDark,
+    onTertiaryContainer = SignalCyan,
     background = BackgroundDeep,
     onBackground = TextPrimary,
     surface = BackgroundDeep,
     onSurface = TextPrimary,
     surfaceVariant = SurfaceVariantMuted,
     onSurfaceVariant = TextSecondary,
+    surfaceContainerLowest = SurfaceContainerLowestDark,
+    surfaceContainerLow = SurfaceContainerLowDark,
     surfaceContainer = SurfaceRaised,
-    surfaceContainerHigh = SurfaceRaised,
+    surfaceContainerHigh = SurfaceContainerHighDark,
+    surfaceContainerHighest = SurfaceContainerHighestDark,
     error = DeviationRed,
     onError = BackgroundDeep,
     errorContainer = DeviationRedDim,
     onErrorContainer = DeviationRed,
     outline = DialTrack
+)
+
+private val HertzLightColorScheme = lightColorScheme(
+    primary = SignalTealLight,
+    onPrimary = Color.White,
+    primaryContainer = SignalTealContainerLight,
+    onPrimaryContainer = SignalTealLight,
+    secondary = InstrumentBlueLight,
+    onSecondary = Color.White,
+    secondaryContainer = SignalTealContainerLight,
+    onSecondaryContainer = SignalTealLight,
+    tertiary = InstrumentBlueLight,
+    onTertiary = Color.White,
+    tertiaryContainer = SignalTealContainerLight,
+    onTertiaryContainer = SignalTealLight,
+    background = BackgroundLight,
+    onBackground = TextPrimaryLight,
+    surface = BackgroundLight,
+    onSurface = TextPrimaryLight,
+    surfaceVariant = SurfaceVariantLight,
+    onSurfaceVariant = TextSecondaryLight,
+    surfaceContainerLowest = SurfaceRaisedLight,
+    surfaceContainerLow = SurfaceRaisedLight,
+    surfaceContainer = SurfaceContainerLight,
+    surfaceContainerHigh = SurfaceContainerHighLight,
+    surfaceContainerHighest = SurfaceContainerHighestLight,
+    error = DeviationRedLight,
+    onError = Color.White,
+    errorContainer = DeviationRedContainerLight,
+    onErrorContainer = DeviationRedLight,
+    outline = DialTrackLight
 )
 
 /**
@@ -53,24 +101,37 @@ data class TunerColors(
     val dialTrack: Color
 )
 
-private val DefaultTunerColors = TunerColors(
+private val DarkTunerColors = TunerColors(
     inTune = SignalCyan,
     slightlyOff = DeviationAmber,
     off = DeviationRed,
     dialTrack = DialTrack
 )
 
-private val LocalTunerColors = staticCompositionLocalOf { DefaultTunerColors }
+private val LightTunerColors = TunerColors(
+    inTune = SignalTealLight,
+    slightlyOff = DeviationAmberLight,
+    off = DeviationRedLight,
+    dialTrack = DialTrackLight
+)
+
+/** 默认给暗色，仅在未包裹 HertzTheme 时生效（预览与仪器测试）。 */
+private val LocalTunerColors = staticCompositionLocalOf { DarkTunerColors }
 
 /** 通过 `MaterialTheme.tunerColors` 取用，与 MaterialTheme.colorScheme 对称。 */
 val MaterialTheme.tunerColors: TunerColors
     @Composable get() = LocalTunerColors.current
 
 @Composable
-fun HertzTheme(content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalTunerColors provides DefaultTunerColors) {
+fun HertzTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    CompositionLocalProvider(
+        LocalTunerColors provides if (darkTheme) DarkTunerColors else LightTunerColors
+    ) {
         MaterialTheme(
-            colorScheme = HertzColorScheme,
+            colorScheme = if (darkTheme) HertzDarkColorScheme else HertzLightColorScheme,
             typography = HertzTypography,
             content = content
         )

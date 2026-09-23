@@ -45,8 +45,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            // HertzTheme 是深色主题，与 themes.xml 承诺的深色 windowBackground
-            // 和浅色状态栏图标成对；详见 ui/theme/Theme.kt 的注释。
+            // HertzTheme 默认跟随系统，并与 themes.xml / values-night/themes.xml
+            // 承诺的 windowBackground 和状态栏图标方向成对；
+            // 详见 ui/theme/Theme.kt 的注释。
             HertzTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),

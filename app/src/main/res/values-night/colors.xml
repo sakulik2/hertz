@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        窗口背景色（深色）。必须与 ui/theme/Color.kt 的 BackgroundDeep 一致。
+        亮色对应值见 values/colors.xml。
+    -->
+    <color name="hertz_window_background">#FF08090B</color>
+</resources>
