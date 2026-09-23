@@ -1,6 +1,32 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
+}
+
+/**
+ * 签名凭据，优先取 keystore.properties，其次取环境变量（供 CI 使用）。
+ * 四项缺任意一项就返回 null —— 半套配置会在构建后期以晦涩的错误失败，
+ * 不如干脆退回未签名构建。
+ */
+fun loadKeystoreProperties(propertiesFile: File): Map<String, String>? {
+    val fromFile = if (propertiesFile.exists()) {
+        Properties().apply { propertiesFile.inputStream().use { load(it) } }
+            .entries.associate { (key, value) -> key.toString() to value.toString() }
+    } else {
+        emptyMap()
+    }
+
+    val resolved = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+        .mapNotNull { key ->
+            val value = fromFile[key]
+                ?: System.getenv("HERTZ_" + key.replace(Regex("([A-Z])"), "_$1").uppercase())
+            value?.takeIf { it.isNotBlank() }?.let { key to it }
+        }
+        .toMap()
+
+    return resolved.takeIf { it.size == 4 }
 }
 
 android {
@@ -20,13 +46,31 @@ android {
         }
     }
 
+    signingConfigs {
+        // 密钥材料从 keystore.properties 或环境变量读取，绝不入库。
+        // 配置缺失时不注册该 signingConfig，release 仍可构建为未签名包。
+        val keystoreProperties = loadKeystoreProperties(rootProject.file("keystore.properties"))
+        if (keystoreProperties != null) {
+            create("release") {
+                storeFile = file(keystoreProperties.getValue("storeFile"))
+                storePassword = keystoreProperties.getValue("storePassword")
+                keyAlias = keystoreProperties.getValue("keyAlias")
+                keyPassword = keystoreProperties.getValue("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 开启后必须在真机上重新验证音高检测：混淆最可能打断的
+            // 正是那个跨包名的手写音频桥
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.findByName("release")
         }
     }
     compileOptions {

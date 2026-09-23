@@ -17,9 +17,10 @@ out/
 # Android Studio Captures
 captures/
 
-# Keystore files (for signing)
+# Keystore files and signing credentials (for signing)
 *.jks
 *.keystore
+keystore.properties
 
 # External Native Build
 .externalNativeBuild/
