@@ -1,66 +1,118 @@
 package xyz.sakulik.hertz.data
 
-import kotlin.math.log2
-import kotlin.math.roundToInt
-
+/**
+ * 观测到的音域。[lowest] / [highest] 为 null 表示尚未有任何极值稳定到可提交。
+ */
 data class VocalRangeState(
     val lowestFreq: Float? = null,
-    val lowestNote: String? = null,
+    val lowest: Note? = null,
     val highestFreq: Float? = null,
-    val highestNote: String? = null,
+    val highest: Note? = null,
     val rangeInSemitones: Int = 0
-)
+) {
+    val hasRange: Boolean get() = lowest != null && highest != null
+}
 
-/** Holds an extremum only after it has been observed in several consecutive frames. */
-class PitchTracker(private val streakThreshold: Int = 3) {
-    private data class Candidate(val midi: Int, val frequency: Float, val name: String, val streak: Int)
+/**
+ * 追踪音域极值，只有当同一个音连续出现 [streakThreshold] 帧后才提交，
+ * 以此过滤 YIN 的瞬时离群值。
+ *
+ * 纯 Kotlin，不依赖 Android，因此音高数学可以在 JVM 单元测试中验证。
+ *
+ * 阈值可配是为了让"会话内读数"和"永久记录"用不同的严格程度：
+ * 会话内读数错了刷新即可，永久记录被污染会一直留着。
+ */
+class PitchTracker(private val streakThreshold: Int = TunerConfig.Default.streakThreshold) {
 
-    private var lowest: Candidate? = null
-    private var highest: Candidate? = null
+    private val low = ExtremeStreak(isLower = true)
+    private val high = ExtremeStreak(isLower = false)
+
     var range: VocalRangeState = VocalRangeState()
         private set
 
-    fun observe(frequency: Float, noteName: String, octave: Int): VocalRangeState {
-        val midi = frequencyToMidi(frequency)
-        val fullName = "$noteName$octave"
-        var lowFreq = range.lowestFreq
-        var lowName = range.lowestNote
-        var highFreq = range.highestFreq
-        var highName = range.highestNote
+    fun observe(frequencyHz: Float, note: Note): VocalRangeState {
+        low.observe(frequencyHz, note, range.lowestFreq)
+        high.observe(frequencyHz, note, range.highestFreq)
 
-        if (lowFreq == null || frequency < lowFreq) {
-            val candidate = lowest
-            lowest = if (candidate?.midi == midi) candidate.copy(frequency = minOf(candidate.frequency, frequency), streak = candidate.streak + 1)
-                else Candidate(midi, frequency, fullName, 1)
-            if (lowest!!.streak >= streakThreshold) { lowFreq = lowest!!.frequency; lowName = lowest!!.name }
-        } else lowest = null
+        val lowestFreq = low.committedFrequency ?: range.lowestFreq
+        val lowest = low.committedNote ?: range.lowest
+        val highestFreq = high.committedFrequency ?: range.highestFreq
+        val highest = high.committedNote ?: range.highest
 
-        if (highFreq == null || frequency > highFreq) {
-            val candidate = highest
-            highest = if (candidate?.midi == midi) candidate.copy(frequency = maxOf(candidate.frequency, frequency), streak = candidate.streak + 1)
-                else Candidate(midi, frequency, fullName, 1)
-            if (highest!!.streak >= streakThreshold) { highFreq = highest!!.frequency; highName = highest!!.name }
-        } else highest = null
-
-        val lowMidi = lowFreq?.let(::frequencyToMidi)
-        val highMidi = highFreq?.let(::frequencyToMidi)
-        range = VocalRangeState(lowFreq, lowName, highFreq, highName, if (lowMidi != null && highMidi != null) maxOf(0, highMidi - lowMidi) else 0)
+        range = VocalRangeState(
+            lowestFreq = lowestFreq,
+            lowest = lowest,
+            highestFreq = highestFreq,
+            highest = highest,
+            rangeInSemitones = if (lowest != null && highest != null) {
+                maxOf(0, highest.midi - lowest.midi)
+            } else {
+                0
+            }
+        )
         return range
     }
 
-    fun reset() { lowest = null; highest = null; range = VocalRangeState() }
+    fun reset() {
+        low.reset()
+        high.reset()
+        range = VocalRangeState()
+    }
 
-    companion object {
-        private val NOTE_NAMES = arrayOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+    /**
+     * 单个方向（最低或最高）的连续帧计数。低音与高音的逻辑互为镜像，
+     * 只有比较方向不同，所以合成一个类而不是把两份几乎相同的代码并排放着。
+     */
+    private inner class ExtremeStreak(private val isLower: Boolean) {
+        private var candidateNote: Note? = null
+        private var candidateFrequency: Float = 0f
+        private var streak: Int = 0
 
-        fun frequencyToMidi(frequency: Float): Int = (12 * log2(frequency.toDouble() / 440.0) + 69).roundToInt()
-        fun centsFromMidi(frequency: Float, midi: Int = frequencyToMidi(frequency)): Float =
-            ((12 * log2(frequency.toDouble() / 440.0) + 69 - midi) * 100).toFloat()
+        /** 本次 observe 中达到阈值而提交的值；未提交则为 null。 */
+        var committedNote: Note? = null
+            private set
+        var committedFrequency: Float? = null
+            private set
 
-        /** Pitch class name for a MIDI number, correct for negative inputs. */
-        fun noteNameFromMidi(midi: Int): String = NOTE_NAMES[((midi % 12) + 12) % 12]
+        fun observe(frequencyHz: Float, note: Note, currentExtreme: Float?) {
+            committedNote = null
+            committedFrequency = null
 
-        /** Scientific pitch notation octave, where MIDI 60 is C4. */
-        fun octaveFromMidi(midi: Int): Int = Math.floorDiv(midi, 12) - 1
+            // 不比已提交的极值更极端，说明这一串已经断了
+            if (currentExtreme != null && !isMoreExtreme(frequencyHz, currentExtreme)) {
+                reset()
+                return
+            }
+
+            if (candidateNote == note) {
+                streak++
+                // 同一个音内取最极端的那次频率，音分偏差才不会被平均掉
+                candidateFrequency = if (isLower) {
+                    minOf(candidateFrequency, frequencyHz)
+                } else {
+                    maxOf(candidateFrequency, frequencyHz)
+                }
+            } else {
+                candidateNote = note
+                candidateFrequency = frequencyHz
+                streak = 1
+            }
+
+            if (streak >= streakThreshold) {
+                committedNote = candidateNote
+                committedFrequency = candidateFrequency
+            }
+        }
+
+        private fun isMoreExtreme(frequencyHz: Float, current: Float): Boolean =
+            if (isLower) frequencyHz < current else frequencyHz > current
+
+        fun reset() {
+            candidateNote = null
+            candidateFrequency = 0f
+            streak = 0
+            committedNote = null
+            committedFrequency = null
+        }
     }
 }

@@ -11,6 +11,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import xyz.sakulik.hertz.R
+import xyz.sakulik.hertz.data.Note
 import xyz.sakulik.hertz.data.PitchResult
 import xyz.sakulik.hertz.data.PitchSource
 
@@ -72,8 +73,7 @@ class PitchScreenTest {
             source.emissions.tryEmit(
                 PitchResult.Detected(
                     frequencyHz = 440f,
-                    noteName = "A",
-                    octave = 4,
+                    note = Note(69),
                     centsDeviation = 0f,
                     probability = 0.95f
                 )

@@ -163,11 +163,7 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
         Spacer(modifier = Modifier.height(16.dp))
 
         // 当前音符显示区域（独立于 Canvas，防止交叉遮挡）
-        val noteText = if (uiState.currentNote != null && uiState.currentOctave != null) {
-            "${uiState.currentNote}${uiState.currentOctave}"
-        } else {
-            "--"
-        }
+        val noteText = uiState.currentNoteLabel ?: "--"
 
         AnimatedContent(
             targetState = noteText,
@@ -212,7 +208,7 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
                         style = MaterialTheme.typography.labelMedium
                     )
                     Text(
-                        text = range.lowestNote ?: "--",
+                        text = range.lowest?.displayName(uiState.noteNaming) ?: "--",
                         style = RangeValueStyle
                     )
                 }
@@ -232,7 +228,7 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
                         style = MaterialTheme.typography.labelMedium
                     )
                     Text(
-                        text = range.highestNote ?: "--",
+                        text = range.highest?.displayName(uiState.noteNaming) ?: "--",
                         style = RangeValueStyle
                     )
                 }

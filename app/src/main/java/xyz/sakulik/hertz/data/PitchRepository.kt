@@ -14,18 +14,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
-/** YIN 置信度阈值：低于此值的帧视为噪声，不触发音高事件 */
-private const val CONFIDENCE_THRESHOLD = 0.85f
-
-/** 人声可用频率范围（Hz）。低音炮约 80Hz，女高音约 1100Hz */
-private const val VOCAL_FREQ_MIN = 80f
-private const val VOCAL_FREQ_MAX = 1100f
-
 sealed class PitchResult {
     data class Detected(
         val frequencyHz: Float,
-        val noteName: String,
-        val octave: Int,
+        val note: Note,
         val centsDeviation: Float,
         val probability: Float
     ) : PitchResult()
@@ -45,7 +37,7 @@ interface PitchSource {
     fun stopListening()
 }
 
-class PitchRepository : PitchSource {
+class PitchRepository(private val config: TunerConfig = TunerConfig.Default) : PitchSource {
 
     private val pitchChannel = Channel<PitchResult>(
         capacity = 8,
@@ -69,7 +61,11 @@ class PitchRepository : PitchSource {
         scope = newScope
 
         try {
-            val newDispatcher = AudioDispatcherFactory.fromDefaultMicrophone(44100, 4096, 3072)
+            val newDispatcher = AudioDispatcherFactory.fromDefaultMicrophone(
+                config.sampleRate,
+                config.bufferSize,
+                config.bufferOverlap
+            )
             dispatcher = newDispatcher
 
             val pitchHandler = PitchDetectionHandler { result, _ ->
@@ -77,17 +73,16 @@ class PitchRepository : PitchSource {
                 val freq = result.pitch
 
                 if (result.isPitched
-                    && probability >= CONFIDENCE_THRESHOLD
-                    && freq in VOCAL_FREQ_MIN..VOCAL_FREQ_MAX
+                    && probability >= config.confidenceThreshold
+                    && freq in config.minFrequencyHz..config.maxFrequencyHz
                 ) {
-                    val midi = PitchTracker.frequencyToMidi(freq)
+                    val note = Note.fromFrequency(freq, config.referencePitchHz)
 
                     pitchChannel.trySend(
                         PitchResult.Detected(
                             frequencyHz = freq,
-                            noteName = PitchTracker.noteNameFromMidi(midi),
-                            octave = PitchTracker.octaveFromMidi(midi),
-                            centsDeviation = PitchTracker.centsFromMidi(freq, midi),
+                            note = note,
+                            centsDeviation = Note.centsFrom(freq, config.referencePitchHz, note),
                             probability = probability
                         )
                     )
@@ -96,7 +91,12 @@ class PitchRepository : PitchSource {
                 }
             }
 
-            val pitchProcessor = PitchProcessor(PitchEstimationAlgorithm.YIN, 44100f, 4096, pitchHandler)
+            val pitchProcessor = PitchProcessor(
+                PitchEstimationAlgorithm.YIN,
+                config.sampleRate.toFloat(),
+                config.bufferSize,
+                pitchHandler
+            )
             newDispatcher.addAudioProcessor(pitchProcessor)
 
             newScope.launch(Dispatchers.IO) {

@@ -15,8 +15,11 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import xyz.sakulik.hertz.data.Note
+import xyz.sakulik.hertz.data.NoteNaming
 import xyz.sakulik.hertz.data.PitchResult
 import xyz.sakulik.hertz.data.PitchSource
+import xyz.sakulik.hertz.data.TunerConfig
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PitchViewModelTest {
@@ -65,7 +68,7 @@ class PitchViewModelTest {
         repeat(3) { source.emissions.emit(detected()) }
         testScheduler.advanceUntilIdle()
         val recordedRange = viewModel.uiState.value.vocalRange
-        assertEquals("A4", recordedRange.lowestNote)
+        assertEquals(Note(69), recordedRange.lowest)
 
         source.emissions.emit(PitchResult.Silence)
         testScheduler.advanceUntilIdle()
@@ -115,6 +118,44 @@ class PitchViewModelTest {
         assertEquals(1, source.stopCount)
     }
 
+    @Test fun usesTheConfiguredSmoothingFactor() = runTest(dispatcher) {
+        val source = FakePitchSource()
+        // 权重 1.0 意味着不平滑，读数直接透传
+        val viewModel = PitchViewModel(source, TunerConfig(smoothingFactor = 1f))
+        viewModel.startListening()
+        testScheduler.advanceUntilIdle()
+
+        source.emissions.emit(detected(centsDeviation = 40f))
+        testScheduler.advanceUntilIdle()
+        assertEquals(40f, viewModel.uiState.value.smoothedCents, 0.01f)
+    }
+
+    @Test fun labelsNotesUsingTheConfiguredNaming() = runTest(dispatcher) {
+        val source = FakePitchSource()
+        val viewModel = PitchViewModel(source, TunerConfig(noteNaming = NoteNaming.FLAT))
+        viewModel.startListening()
+        testScheduler.advanceUntilIdle()
+
+        source.emissions.emit(detected(frequencyHz = 277.2f, note = Note(61)))
+        testScheduler.advanceUntilIdle()
+        assertEquals("Db4", viewModel.uiState.value.currentNoteLabel)
+    }
+
+    @Test fun requiresTheConfiguredStreakBeforeRecordingRange() = runTest(dispatcher) {
+        val source = FakePitchSource()
+        val viewModel = PitchViewModel(source, TunerConfig(streakThreshold = 5))
+        viewModel.startListening()
+        testScheduler.advanceUntilIdle()
+
+        repeat(4) { source.emissions.emit(detected()) }
+        testScheduler.advanceUntilIdle()
+        assertNull(viewModel.uiState.value.vocalRange.lowest)
+
+        source.emissions.emit(detected())
+        testScheduler.advanceUntilIdle()
+        assertEquals(Note(69), viewModel.uiState.value.vocalRange.lowest)
+    }
+
     @Test fun resetRangeClearsRangeAndCents() = runTest(dispatcher) {
         val source = FakePitchSource()
         val viewModel = PitchViewModel(source)
@@ -123,18 +164,21 @@ class PitchViewModelTest {
 
         repeat(3) { source.emissions.emit(detected()) }
         testScheduler.advanceUntilIdle()
-        assertEquals("A4", viewModel.uiState.value.vocalRange.lowestNote)
+        assertEquals(Note(69), viewModel.uiState.value.vocalRange.lowest)
 
         viewModel.resetRange()
-        assertNull(viewModel.uiState.value.vocalRange.lowestNote)
+        assertNull(viewModel.uiState.value.vocalRange.lowest)
         assertEquals(0, viewModel.uiState.value.vocalRange.rangeInSemitones)
         assertEquals(0f, viewModel.uiState.value.smoothedCents, 0.01f)
     }
 
-    private fun detected(centsDeviation: Float = 0f) = PitchResult.Detected(
-        frequencyHz = 440f,
-        noteName = "A",
-        octave = 4,
+    private fun detected(
+        centsDeviation: Float = 0f,
+        frequencyHz: Float = 440f,
+        note: Note = Note(69)
+    ) = PitchResult.Detected(
+        frequencyHz = frequencyHz,
+        note = note,
         centsDeviation = centsDeviation,
         probability = 0.95f
     )
