@@ -2,6 +2,8 @@
 build/
 .gradle/
 */build/
+# Studio 的「Generate Signed Bundle / APK」向导把产物写到这里，不在 build/ 下
+app/release/
 
 # Local configuration
 local.properties
@@ -20,7 +22,11 @@ captures/
 # Keystore files and signing credentials (for signing)
 *.jks
 *.keystore
-keystore.properties
+*.p12
+# 通配以覆盖 keystore.properties.bak 之类的副本——精确文件名挡不住它们
+keystore.properties*
+# 模板只含占位符，需要入库
+!keystore.properties.example
 
 # External Native Build
 .externalNativeBuild/
