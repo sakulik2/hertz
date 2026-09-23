@@ -14,13 +14,20 @@ public class AndroidAudioInputStream implements TarsosDSPAudioInputStream {
         this.format = format;
     }
 
+    /** Upper bound on the scratch buffer so a large skip cannot allocate an oversized array. */
+    private static final int MAX_SKIP_BUFFER_SIZE = 8192;
+
     @Override
     public long skip(long bytesToSkip) throws IOException {
+        if (bytesToSkip <= 0) {
+            return 0;
+        }
         long skipped = 0;
-        byte[] buffer = new byte[(int) bytesToSkip];
+        byte[] buffer = new byte[(int) Math.min(bytesToSkip, MAX_SKIP_BUFFER_SIZE)];
         while (skipped < bytesToSkip) {
-            int read = audioRecord.read(buffer, 0, (int) (bytesToSkip - skipped));
-            if (read < 0) break;
+            int chunk = (int) Math.min(bytesToSkip - skipped, buffer.length);
+            int read = audioRecord.read(buffer, 0, chunk);
+            if (read <= 0) break;
             skipped += read;
         }
         return skipped;
@@ -33,8 +40,15 @@ public class AndroidAudioInputStream implements TarsosDSPAudioInputStream {
 
     @Override
     public void close() throws IOException {
-        audioRecord.stop();
-        audioRecord.release();
+        try {
+            if (audioRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
+                audioRecord.stop();
+            }
+        } catch (IllegalStateException ignored) {
+            // A failed or already stopped recording still needs to release the device.
+        } finally {
+            audioRecord.release();
+        }
     }
 
     @Override

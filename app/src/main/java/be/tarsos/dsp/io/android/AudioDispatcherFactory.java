@@ -16,9 +16,14 @@ public class AudioDispatcherFactory {
             audioRecord.release();
             throw new IllegalStateException("AudioRecord failed to initialize. Check RECORD_AUDIO permission and hardware availability.");
         }
-        audioRecord.startRecording();
-        TarsosDSPAudioFormat format = new TarsosDSPAudioFormat((float) sampleRate, 16, 1, true, false);
-        TarsosDSPAudioInputStream audioStream = new AndroidAudioInputStream(audioRecord, format);
-        return new AudioDispatcher(audioStream, audioBufferSize, bufferOverlap);
+        try {
+            audioRecord.startRecording();
+            TarsosDSPAudioFormat format = new TarsosDSPAudioFormat((float) sampleRate, 16, 1, true, false);
+            TarsosDSPAudioInputStream audioStream = new AndroidAudioInputStream(audioRecord, format);
+            return new AudioDispatcher(audioStream, audioBufferSize, bufferOverlap);
+        } catch (RuntimeException exception) {
+            audioRecord.release();
+            throw exception;
+        }
     }
 }
