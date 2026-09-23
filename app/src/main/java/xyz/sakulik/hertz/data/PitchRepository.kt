@@ -37,7 +37,14 @@ interface PitchSource {
     fun stopListening()
 }
 
-class PitchRepository(private val config: TunerConfig = TunerConfig.Default) : PitchSource {
+/**
+ * [configProvider] 每帧读取一次，而不是在构造时固化，这样基准音、灵敏度和频率门限
+ * 的改动能立刻生效。采样率与缓冲大小例外：它们在 [startListening] 时读取一次，
+ * 因为改变它们必须重建 AudioRecord。
+ */
+class PitchRepository(
+    private val configProvider: () -> TunerConfig = { TunerConfig.Default }
+) : PitchSource {
 
     private val pitchChannel = Channel<PitchResult>(
         capacity = 8,
@@ -60,15 +67,21 @@ class PitchRepository(private val config: TunerConfig = TunerConfig.Default) : P
         val newScope = CoroutineScope(Dispatchers.IO)
         scope = newScope
 
+        // 音频参数只在开始采集时读一次：改变它们要重建 AudioRecord，
+        // 而 PitchProcessor 也必须拿到与之一致的采样率和缓冲大小
+        val audioConfig = configProvider()
+
         try {
             val newDispatcher = AudioDispatcherFactory.fromDefaultMicrophone(
-                config.sampleRate,
-                config.bufferSize,
-                config.bufferOverlap
+                audioConfig.sampleRate,
+                audioConfig.bufferSize,
+                audioConfig.bufferOverlap
             )
             dispatcher = newDispatcher
 
             val pitchHandler = PitchDetectionHandler { result, _ ->
+                // 每帧重新读取，让基准音与灵敏度的改动立即生效
+                val config = configProvider()
                 val probability = result.probability
                 val freq = result.pitch
 
@@ -93,8 +106,8 @@ class PitchRepository(private val config: TunerConfig = TunerConfig.Default) : P
 
             val pitchProcessor = PitchProcessor(
                 PitchEstimationAlgorithm.YIN,
-                config.sampleRate.toFloat(),
-                config.bufferSize,
+                audioConfig.sampleRate.toFloat(),
+                audioConfig.bufferSize,
                 pitchHandler
             )
             newDispatcher.addAudioProcessor(pitchProcessor)

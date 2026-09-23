@@ -36,7 +36,7 @@ class PitchScreenTest {
 
     @Test fun startsCaptureOnceTheScreenResumes() {
         val source = FakePitchSource()
-        composeTestRule.setContent { PitchScreen(PitchViewModel(source)) }
+        composeTestRule.setContent { PitchScreen(PitchViewModel.forTesting(source)) }
         composeTestRule.waitForIdle()
 
         // 屏幕进入 RESUMED 后应自动开始采集，因此按钮显示"暂停"
@@ -46,7 +46,7 @@ class PitchScreenTest {
 
     @Test fun userPauseStopsCaptureAndTogglesButton() {
         val source = FakePitchSource()
-        composeTestRule.setContent { PitchScreen(PitchViewModel(source)) }
+        composeTestRule.setContent { PitchScreen(PitchViewModel.forTesting(source)) }
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText(string(R.string.btn_pause)).performClick()
@@ -57,7 +57,7 @@ class PitchScreenTest {
     }
 
     @Test fun showsPlaceholdersBeforeAnyPitchArrives() {
-        composeTestRule.setContent { PitchScreen(PitchViewModel(FakePitchSource())) }
+        composeTestRule.setContent { PitchScreen(PitchViewModel.forTesting(FakePitchSource())) }
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("--").assertIsDisplayed()
@@ -66,7 +66,7 @@ class PitchScreenTest {
 
     @Test fun rendersDetectedNoteAndFrequency() {
         val source = FakePitchSource()
-        composeTestRule.setContent { PitchScreen(PitchViewModel(source)) }
+        composeTestRule.setContent { PitchScreen(PitchViewModel.forTesting(source)) }
         composeTestRule.waitForIdle()
 
         composeTestRule.runOnIdle {
@@ -87,7 +87,7 @@ class PitchScreenTest {
 
     @Test fun surfacesErrorStateWithRetryAction() {
         val source = FakePitchSource()
-        composeTestRule.setContent { PitchScreen(PitchViewModel(source)) }
+        composeTestRule.setContent { PitchScreen(PitchViewModel.forTesting(source)) }
         composeTestRule.waitForIdle()
 
         composeTestRule.runOnIdle {

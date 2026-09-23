@@ -9,6 +9,13 @@
     <string name="label_highest">Highest</string>
     <string name="label_range">Range</string>
     <string name="unit_semitones">%1$d semitones</string>
+    <string name="label_session_range">This session</string>
+    <string name="label_best_range">Personal best</string>
+    <string name="btn_clear_record">Clear saved record</string>
+    <string name="dialog_clear_record_title">Clear saved record?</string>
+    <string name="dialog_clear_record_message">This permanently deletes your best recorded range and cannot be undone. The current session reading is unaffected.</string>
+    <string name="btn_clear_record_confirm">Clear</string>
+    <string name="btn_cancel">Cancel</string>
     <string name="btn_start">Start</string>
     <string name="btn_pause">Pause</string>
     <string name="btn_reset_range">Reset Range</string>

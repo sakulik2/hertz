@@ -9,6 +9,13 @@
     <string name="label_highest">最高音</string>
     <string name="label_range">音域</string>
     <string name="unit_semitones">%1$d 半音</string>
+    <string name="label_session_range">本次会话</string>
+    <string name="label_best_range">历史最佳</string>
+    <string name="btn_clear_record">清除历史记录</string>
+    <string name="dialog_clear_record_title">清除历史记录？</string>
+    <string name="dialog_clear_record_message">将永久删除已记录的最佳音域，此操作无法撤销。本次会话的读数不受影响。</string>
+    <string name="btn_clear_record_confirm">清除</string>
+    <string name="btn_cancel">取消</string>
     <string name="btn_start">开始</string>
     <string name="btn_pause">暂停</string>
     <string name="btn_reset_range">重置音域</string>
