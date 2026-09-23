@@ -4,7 +4,7 @@ All notable changes to Hertz are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-09-24
 
 Infrastructure hardening pass. The app's features were working, but nothing it produced
 survived being closed, nothing was configurable, and there was no release path.
@@ -30,6 +30,11 @@ survived being closed, nothing was configurable, and there was no release path.
 - R8 shrinking with rules for the hand-written audio bridge, release signing from
   `keystore.properties` or environment variables, and GitHub Actions CI running unit
   tests, debug and release builds, and instrumentation compilation.
+- A tag-triggered release workflow. Unlike CI, it refuses to build without signing
+  credentials, since an unsigned APK cannot install as an upgrade over a signed one, and
+  it fails when the tag disagrees with `versionName`. CI verifies the signer of a signed
+  build rather than trusting a successful build, because a `storeFile` path that
+  `.properties` escaping had mangled still produced a green unsigned build.
 - Gradle version catalog (`gradle/libs.versions.toml`).
 
 ### Changed
