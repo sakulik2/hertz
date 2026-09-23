@@ -19,7 +19,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,14 +34,15 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import xyz.sakulik.hertz.ui.PitchScreen
+import xyz.sakulik.hertz.ui.theme.HertzTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            // 与 themes.xml 保持一致：该主题承诺黑色窗口背景与浅色状态栏图标，
-            // 因此 Compose 必须使用深色配色，否则启动时会黑白闪烁。
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            // HertzTheme 是深色主题，与 themes.xml 承诺的深色 windowBackground
+            // 和浅色状态栏图标成对；详见 ui/theme/Theme.kt 的注释。
+            HertzTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

@@ -38,16 +38,33 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import xyz.sakulik.hertz.R
+import xyz.sakulik.hertz.ui.theme.RangeValueStyle
+import xyz.sakulik.hertz.ui.theme.tunerColors
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
+
+/** 指针配色档位：偏差小于此值视为准音 */
+private const val IN_TUNE_CENTS = 10f
+
+/** 偏差小于此值视为轻微偏离，超出则视为明显偏离 */
+private const val SLIGHTLY_OFF_CENTS = 25f
+
+/*
+ * 表盘几何：从 210° 起顺时针扫过 120°，正中为 270°（正上方）。
+ * ±DIAL_CENTS_SPAN 音分映射到 ±DIAL_HALF_SWEEP_DEGREES。
+ */
+private const val DIAL_START_ANGLE = 210f
+private const val DIAL_SWEEP_ANGLE = 120f
+private const val DIAL_CENTER_ANGLE = 270f
+private const val DIAL_HALF_SWEEP_DEGREES = 60f
+private const val DIAL_CENTS_SPAN = 50f
 
 @Composable
 fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.Factory)) {
@@ -91,11 +108,13 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
             label = "centsAnimation"
         )
 
+        // 指针颜色分三档，比原先的"准/不准"二值更能反映接近程度
+        val tunerColors = MaterialTheme.tunerColors
         val pointerColor by animateColorAsState(
-            targetValue = if (abs(uiState.smoothedCents) < 10f) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.error
+            targetValue = when {
+                abs(uiState.smoothedCents) < IN_TUNE_CENTS -> tunerColors.inTune
+                abs(uiState.smoothedCents) < SLIGHTLY_OFF_CENTS -> tunerColors.slightlyOff
+                else -> tunerColors.off
             },
             label = "pointerColorAnimation"
         )
@@ -107,7 +126,7 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
                 .height(150.dp),
             contentAlignment = Alignment.BottomCenter
         ) {
-            val trackColor = MaterialTheme.colorScheme.surfaceVariant
+            val trackColor = tunerColors.dialTrack
 
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val arcCenter = Offset(size.width / 2f, size.height - 12.dp.toPx())
@@ -116,8 +135,8 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
                 // 绘制背景半圆弧轨迹（从 210° 扫过 120° 到 330°）
                 drawArc(
                     color = trackColor,
-                    startAngle = 210f,
-                    sweepAngle = 120f,
+                    startAngle = DIAL_START_ANGLE,
+                    sweepAngle = DIAL_SWEEP_ANGLE,
                     useCenter = false,
                     topLeft = Offset(arcCenter.x - radius, arcCenter.y - radius),
                     size = Size(radius * 2, radius * 2),
@@ -125,7 +144,8 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
                 )
 
                 // 绘制音高偏差指示针
-                val angleDegrees = 270f + (animatedSmoothedCents / 50f).coerceIn(-1f, 1f) * 60f
+                val angleDegrees = DIAL_CENTER_ANGLE +
+                    (animatedSmoothedCents / DIAL_CENTS_SPAN).coerceIn(-1f, 1f) * DIAL_HALF_SWEEP_DEGREES
                 val angleRadians = angleDegrees * PI / 180.0
                 val endX = arcCenter.x + radius * cos(angleRadians).toFloat()
                 val endY = arcCenter.y + radius * sin(angleRadians).toFloat()
@@ -158,7 +178,7 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
         ) { text ->
             Text(
                 text = text,
-                fontSize = 56.sp,
+                style = MaterialTheme.typography.displayLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
@@ -193,7 +213,7 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
                     )
                     Text(
                         text = range.lowestNote ?: "--",
-                        style = MaterialTheme.typography.titleMedium
+                        style = RangeValueStyle
                     )
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -203,7 +223,7 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
                     )
                     Text(
                         text = stringResource(R.string.unit_semitones, range.rangeInSemitones),
-                        style = MaterialTheme.typography.titleMedium
+                        style = RangeValueStyle
                     )
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -213,7 +233,7 @@ fun PitchScreen(viewModel: PitchViewModel = viewModel(factory = PitchViewModel.F
                     )
                     Text(
                         text = range.highestNote ?: "--",
-                        style = MaterialTheme.typography.titleMedium
+                        style = RangeValueStyle
                     )
                 }
             }

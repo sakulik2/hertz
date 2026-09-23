@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        窗口背景色。必须与 ui/theme/Color.kt 里的 BackgroundDeep 保持一致：
+        themes.xml 用它做 windowBackground，Compose 用它做 background，
+        两者不一致会在启动时出现一帧色差闪烁。
+    -->
+    <color name="hertz_window_background">#FF08090B</color>
+</resources>
