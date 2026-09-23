@@ -1,0 +1,93 @@
+name: Release
+
+# 只由 v* 标签触发。ci.yml 覆盖日常推送，这里专管出正式包。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # 标签与 versionName 不一致是最容易犯且最难察觉的错：装到手机上
+      # 版本号对不上标签，事后无法分辨某个崩溃来自哪次构建
+      - name: Check tag matches versionName
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          declared=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          echo "tag=$tag versionName=$declared"
+          if [ "$tag" != "$declared" ]; then
+            echo "::error::标签 $GITHUB_REF_NAME 与 versionName $declared 不一致"
+            exit 1
+          fi
+
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest --console=plain
+
+      # 正式包必须签名。缺密钥就直接失败 —— 发一个未签名包出去，
+      # 用户装不上，且它与已发布版本的升级链就断了
+      - name: Decode keystore
+        env:
+          HERTZ_KEYSTORE_BASE64: ${{ secrets.HERTZ_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$HERTZ_KEYSTORE_BASE64" ]; then
+            echo "::error::未配置 HERTZ_KEYSTORE_BASE64，拒绝产出未签名的正式包"
+            exit 1
+          fi
+          printf '%s' "$HERTZ_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/hertz-release.jks"
+
+      - name: Assemble release
+        env:
+          HERTZ_STORE_FILE: ${{ runner.temp }}/hertz-release.jks
+          HERTZ_STORE_PASSWORD: ${{ secrets.HERTZ_STORE_PASSWORD }}
+          HERTZ_KEY_ALIAS: ${{ secrets.HERTZ_KEY_ALIAS }}
+          HERTZ_KEY_PASSWORD: ${{ secrets.HERTZ_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease --console=plain
+
+      # 断言签名真的生效：storeFile 路径写错时构建同样会成功
+      - name: Verify release signature
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk
+
+      - name: Remove decoded keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/hertz-release.jks"
+
+      # mapping.txt 是解读该版本崩溃栈的唯一依据，必须与包一起留存
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: hertz-release-${{ github.ref_name }}
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/mapping/release/mapping.txt
+
+      # 草稿状态发布，正文和上架时机由人决定
+      - name: Create draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --title "$GITHUB_REF_NAME" \
+            --notes "见 CHANGELOG.md。构建来自 $GITHUB_SHA。" \
+            app/build/outputs/apk/release/app-release.apk \
+            app/build/outputs/mapping/release/mapping.txt
