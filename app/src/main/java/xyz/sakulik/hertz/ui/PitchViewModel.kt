@@ -12,14 +12,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import xyz.sakulik.hertz.HertzApp
 import xyz.sakulik.hertz.data.ConfigSnapshot
-import xyz.sakulik.hertz.data.DataStoreRangeRecordStore
-import xyz.sakulik.hertz.data.DataStoreSettingsStore
 import xyz.sakulik.hertz.data.InMemoryRangeRecordStore
 import xyz.sakulik.hertz.data.InMemorySettingsStore
 import xyz.sakulik.hertz.data.Note
 import xyz.sakulik.hertz.data.NoteNaming
-import xyz.sakulik.hertz.data.PitchRepository
 import xyz.sakulik.hertz.data.PitchResult
 import xyz.sakulik.hertz.data.PitchSource
 import xyz.sakulik.hertz.data.PitchTracker
@@ -105,16 +103,15 @@ class PitchViewModel(
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                val context = requireNotNull(this[APPLICATION_KEY]) {
-                    "PitchViewModel.Factory needs the Application in CreationExtras"
-                }.applicationContext
-                // Repository 与 ViewModel 共享同一个快照，所以设置改动无需重启采集
-                val snapshot = ConfigSnapshot()
+                // 走 AppContainer 而不是各自新建，否则设置页与本页会用上两份互不相通的存储
+                val container = requireNotNull(this[APPLICATION_KEY] as? HertzApp) {
+                    "PitchViewModel.Factory needs HertzApp in CreationExtras"
+                }.container
                 PitchViewModel(
-                    repository = PitchRepository { snapshot.value },
-                    settingsStore = DataStoreSettingsStore(context),
-                    recordStore = DataStoreRangeRecordStore(context),
-                    configSnapshot = snapshot
+                    repository = container.createPitchRepository(),
+                    settingsStore = container.settingsStore,
+                    recordStore = container.recordStore,
+                    configSnapshot = container.configSnapshot
                 )
             }
         }

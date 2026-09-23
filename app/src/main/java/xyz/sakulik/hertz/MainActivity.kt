@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
@@ -23,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,7 +35,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.viewmodel.compose.viewModel
 import xyz.sakulik.hertz.ui.PitchScreen
+import xyz.sakulik.hertz.ui.SettingsScreen
+import xyz.sakulik.hertz.ui.SettingsViewModel
 import xyz.sakulik.hertz.ui.theme.HertzTheme
 
 class MainActivity : ComponentActivity() {
@@ -103,7 +108,18 @@ fun MainScreen() {
     }
 
     if (hasPermission) {
-        PitchScreen()
+        // 只有两个界面，用一个状态量切换比引入 navigation 依赖更轻
+        var showSettings by rememberSaveable { mutableStateOf(false) }
+        BackHandler(enabled = showSettings) { showSettings = false }
+
+        if (showSettings) {
+            SettingsScreen(
+                viewModel = viewModel(factory = SettingsViewModel.Factory),
+                onNavigateBack = { showSettings = false }
+            )
+        } else {
+            PitchScreen(onOpenSettings = { showSettings = true })
+        }
     } else {
         Column(
             modifier = Modifier

@@ -16,6 +16,35 @@
     <string name="dialog_clear_record_message">This permanently deletes your best recorded range and cannot be undone. The current session reading is unaffected.</string>
     <string name="btn_clear_record_confirm">Clear</string>
     <string name="btn_cancel">Cancel</string>
+    <string name="value_placeholder">--</string>
+    <string name="value_placeholder_hz">-- Hz</string>
+
+    <!-- Settings -->
+    <string name="btn_settings">Settings</string>
+    <string name="title_settings">Settings</string>
+    <string name="setting_reference_pitch">Reference pitch</string>
+    <string name="setting_reference_pitch_desc">The frequency of A4. 440 Hz is the international standard, orchestras often use 442 Hz, and Baroque pitch is 415 Hz.</string>
+    <string name="setting_note_naming">Note spelling</string>
+    <string name="setting_note_naming_desc">How enharmonics are displayed. Does not affect pitch detection.</string>
+    <string name="naming_sharp">Sharps (C#)</string>
+    <string name="naming_flat">Flats (Db)</string>
+    <string name="setting_sensitivity">Sensitivity</string>
+    <string name="setting_sensitivity_desc">Higher values reject more noise but also ignore quieter notes.</string>
+    <string name="setting_smoothing">Pointer smoothing</string>
+    <string name="setting_smoothing_desc">Lower values steady the pointer but respond more slowly. 1 disables smoothing.</string>
+    <string name="setting_frequency_window">Frequency range</string>
+    <string name="setting_frequency_window_desc">Pitches outside this range are ignored, which filters out background noise.</string>
+    <string name="label_min_frequency">Minimum</string>
+    <string name="label_max_frequency">Maximum</string>
+    <string name="btn_reset_defaults">Reset defaults</string>
+    <string name="btn_done">Done</string>
+
+    <!-- Accessibility announcements -->
+    <string name="a11y_no_reading">No reading</string>
+    <string name="a11y_in_tune">In tune</string>
+    <string name="a11y_cents_sharp">%1$d cents sharp</string>
+    <string name="a11y_cents_flat">%1$d cents flat</string>
+    <string name="a11y_note_and_frequency">%1$s, %2$.1f hertz</string>
     <string name="btn_start">Start</string>
     <string name="btn_pause">Pause</string>
     <string name="btn_reset_range">Reset Range</string>
