@@ -18,6 +18,7 @@ import xyz.sakulik.hertz.data.InMemoryRangeRecordStore
 import xyz.sakulik.hertz.data.InMemorySettingsStore
 import xyz.sakulik.hertz.data.Note
 import xyz.sakulik.hertz.data.NoteNaming
+import xyz.sakulik.hertz.data.PitchError
 import xyz.sakulik.hertz.data.PitchResult
 import xyz.sakulik.hertz.data.PitchSource
 import xyz.sakulik.hertz.data.PitchTracker
@@ -37,7 +38,8 @@ data class UiState(
     /** 跨会话保留的历史最佳音域；尚无记录时为 null。 */
     val bestRange: RangeRecord? = null,
     val smoothedCents: Float = 0f,
-    val hasError: Boolean = false,
+    /** 当前的麦克风故障；无故障时为 null。 */
+    val error: PitchError? = null,
     val noteNaming: NoteNaming = NoteNaming.SHARP
 ) {
     /** 例如 "A4"；无读数时为 null，由 UI 决定占位符。 */
@@ -137,7 +139,7 @@ class PitchViewModel(
         if (_uiState.value.isListening) return
 
         repository.startListening()
-        _uiState.update { it.copy(isListening = true, hasError = false) }
+        _uiState.update { it.copy(isListening = true, error = null) }
 
         if (collectJob?.isActive == true) return
         collectJob = viewModelScope.launch {
@@ -146,7 +148,7 @@ class PitchViewModel(
                 when (result) {
                     is PitchResult.Detected -> onDetected(result)
                     PitchResult.Silence -> onSilence()
-                    is PitchResult.Error -> onError()
+                    is PitchResult.Error -> onError(result.error)
                 }
             }
         }
@@ -205,9 +207,9 @@ class PitchViewModel(
         )
     }
 
-    private fun onError() {
+    private fun onError(error: PitchError) {
         stopListening()
-        _uiState.update { it.copy(hasError = true) }
+        _uiState.update { it.copy(error = error) }
     }
 
     fun resumeListeningFromLifecycle() {

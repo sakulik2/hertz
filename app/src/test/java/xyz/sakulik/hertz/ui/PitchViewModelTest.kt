@@ -19,6 +19,7 @@ import xyz.sakulik.hertz.data.InMemoryRangeRecordStore
 import xyz.sakulik.hertz.data.InMemorySettingsStore
 import xyz.sakulik.hertz.data.Note
 import xyz.sakulik.hertz.data.NoteNaming
+import xyz.sakulik.hertz.data.PitchError
 import xyz.sakulik.hertz.data.PitchResult
 import xyz.sakulik.hertz.data.PitchSource
 import xyz.sakulik.hertz.data.RangeRecord
@@ -113,12 +114,48 @@ class PitchViewModelTest {
         viewModel.startListening()
         testScheduler.advanceUntilIdle()
 
-        source.emissions.emit(PitchResult.Error(IllegalStateException("mic gone")))
+        source.emissions.emit(PitchResult.Error(PitchError.DeviceBusy))
         testScheduler.advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.hasError)
+        assertEquals(PitchError.DeviceBusy, viewModel.uiState.value.error)
         assertFalse(viewModel.uiState.value.isListening)
         assertEquals(1, source.stopCount)
+    }
+
+    @Test fun surfacesTheSpecificErrorKindToTheUi() = runTest(dispatcher) {
+        // 四种故障的处置方式不同，UI 必须能分辨，而不是只知道"出错了"
+        val cases = listOf(
+            PitchError.PermissionRevoked,
+            PitchError.DeviceBusy,
+            PitchError.InitFailed,
+            PitchError.Unknown(IllegalArgumentException("boom"))
+        )
+        for (expected in cases) {
+            val source = FakePitchSource()
+            val viewModel = PitchViewModel.forTesting(source)
+            viewModel.startListening()
+            testScheduler.advanceUntilIdle()
+
+            source.emissions.emit(PitchResult.Error(expected))
+            testScheduler.advanceUntilIdle()
+            assertEquals(expected, viewModel.uiState.value.error)
+        }
+    }
+
+    @Test fun clearsThePreviousErrorWhenRetrying() = runTest(dispatcher) {
+        val source = FakePitchSource()
+        val viewModel = PitchViewModel.forTesting(source)
+        viewModel.startListening()
+        testScheduler.advanceUntilIdle()
+
+        source.emissions.emit(PitchResult.Error(PitchError.DeviceBusy))
+        testScheduler.advanceUntilIdle()
+        assertEquals(PitchError.DeviceBusy, viewModel.uiState.value.error)
+
+        viewModel.startListening(isUserAction = true)
+        testScheduler.advanceUntilIdle()
+        assertNull(viewModel.uiState.value.error)
+        assertTrue(viewModel.uiState.value.isListening)
     }
 
     @Test fun usesTheConfiguredSmoothingFactor() = runTest(dispatcher) {

@@ -12,6 +12,7 @@ import org.junit.Rule
 import org.junit.Test
 import xyz.sakulik.hertz.R
 import xyz.sakulik.hertz.data.Note
+import xyz.sakulik.hertz.data.PitchError
 import xyz.sakulik.hertz.data.PitchResult
 import xyz.sakulik.hertz.data.PitchSource
 
@@ -91,11 +92,44 @@ class PitchScreenTest {
         composeTestRule.waitForIdle()
 
         composeTestRule.runOnIdle {
-            source.emissions.tryEmit(PitchResult.Error(IllegalStateException("mic gone")))
+            source.emissions.tryEmit(PitchResult.Error(PitchError.DeviceBusy))
         }
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText(string(R.string.mic_error_title)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.mic_error_busy)).assertIsDisplayed()
         composeTestRule.onNodeWithText(string(R.string.btn_retry)).assertIsDisplayed()
+    }
+
+    @Test fun offersSystemSettingsRatherThanRetryWhenPermissionIsRevoked() {
+        val source = FakePitchSource()
+        composeTestRule.setContent { PitchScreen(PitchViewModel.forTesting(source)) }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.runOnIdle {
+            source.emissions.tryEmit(PitchResult.Error(PitchError.PermissionRevoked))
+        }
+        composeTestRule.waitForIdle()
+
+        // 权限被撤销时重试毫无意义，应引导用户去系统设置
+        composeTestRule.onNodeWithText(string(R.string.mic_error_permission)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.btn_open_settings)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.btn_retry)).assertDoesNotExist()
+    }
+
+    @Test fun offersNoActionWhenTheRecorderCannotInitialize() {
+        val source = FakePitchSource()
+        composeTestRule.setContent { PitchScreen(PitchViewModel.forTesting(source)) }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.runOnIdle {
+            source.emissions.tryEmit(PitchResult.Error(PitchError.InitFailed))
+        }
+        composeTestRule.waitForIdle()
+
+        // 硬件初始化失败，重试也不会成功，因此不给按钮而只说明原因
+        composeTestRule.onNodeWithText(string(R.string.mic_error_init)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.btn_retry)).assertDoesNotExist()
+        composeTestRule.onNodeWithText(string(R.string.btn_open_settings)).assertDoesNotExist()
     }
 }

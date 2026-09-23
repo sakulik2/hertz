@@ -14,7 +14,10 @@ public class AudioDispatcherFactory {
         AudioRecord audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, audioBufferByteSize);
         if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
             audioRecord.release();
-            throw new IllegalStateException("AudioRecord failed to initialize. Check RECORD_AUDIO permission and hardware availability.");
+            throw new MicrophoneUnavailableException(
+                    MicrophoneUnavailableException.Reason.NOT_INITIALIZED,
+                    "AudioRecord failed to initialize. Check RECORD_AUDIO permission and hardware availability.",
+                    null);
         }
         try {
             audioRecord.startRecording();
@@ -23,7 +26,10 @@ public class AudioDispatcherFactory {
             return new AudioDispatcher(audioStream, audioBufferSize, bufferOverlap);
         } catch (RuntimeException exception) {
             audioRecord.release();
-            throw exception;
+            throw new MicrophoneUnavailableException(
+                    MicrophoneUnavailableException.Reason.START_FAILED,
+                    "AudioRecord could not start recording. The microphone may be in use by another app.",
+                    exception);
         }
     }
 }

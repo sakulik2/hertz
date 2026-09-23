@@ -1,6 +1,9 @@
 package xyz.sakulik.hertz
 
+import android.Manifest
 import android.app.Application
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import xyz.sakulik.hertz.data.ConfigSnapshot
 import xyz.sakulik.hertz.data.DataStoreRangeRecordStore
 import xyz.sakulik.hertz.data.DataStoreSettingsStore
@@ -24,8 +27,17 @@ class AppContainer(application: Application) {
     /** 音频线程每帧同步读取的设置快照，由 PitchViewModel 写入。 */
     val configSnapshot = ConfigSnapshot()
 
-    /** 每帧读取快照，使基准音与灵敏度的改动无需重启采集即可生效。 */
-    fun createPitchRepository() = PitchRepository { configSnapshot.value }
+    fun createPitchRepository() = PitchRepository(
+        // 每帧读取快照，使基准音与灵敏度的改动无需重启采集即可生效
+        configProvider = { configSnapshot.value },
+        // 每次出错时重新查询：权限可能在采集途中被撤销
+        hasPermission = {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+    )
 }
 
 class HertzApp : Application() {

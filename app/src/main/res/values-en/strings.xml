@@ -49,6 +49,10 @@
     <string name="btn_pause">Pause</string>
     <string name="btn_reset_range">Reset Range</string>
     <string name="mic_error_title">Microphone unavailable</string>
-    <string name="mic_error_message">Check microphone permission and device availability, then try again.</string>
+    <string name="mic_error_permission">Microphone permission was revoked. Re-enable it in system settings, then come back.</string>
+    <string name="mic_error_busy">Another app is using the microphone. Close it and try again.</string>
+    <string name="mic_error_init">The recorder could not start. The hardware may be unavailable or restricted.</string>
+    <string name="mic_error_unknown">An unexpected recording error occurred. Please try again.</string>
     <string name="btn_retry">Retry</string>
+    <string name="btn_open_settings">Open settings</string>
 </resources>

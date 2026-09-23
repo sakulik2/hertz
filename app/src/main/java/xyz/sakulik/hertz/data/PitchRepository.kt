@@ -1,5 +1,6 @@
 package xyz.sakulik.hertz.data
 
+import android.util.Log
 import be.tarsos.dsp.AudioDispatcher
 import be.tarsos.dsp.io.android.AudioDispatcherFactory
 import be.tarsos.dsp.pitch.PitchDetectionHandler
@@ -14,6 +15,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
+private const val TAG = "PitchRepository"
+
 sealed class PitchResult {
     data class Detected(
         val frequencyHz: Float,
@@ -24,7 +27,7 @@ sealed class PitchResult {
 
     data object Silence : PitchResult()
 
-    data class Error(val exception: Throwable) : PitchResult()
+    data class Error(val error: PitchError) : PitchResult()
 }
 
 /**
@@ -41,9 +44,13 @@ interface PitchSource {
  * [configProvider] 每帧读取一次，而不是在构造时固化，这样基准音、灵敏度和频率门限
  * 的改动能立刻生效。采样率与缓冲大小例外：它们在 [startListening] 时读取一次，
  * 因为改变它们必须重建 AudioRecord。
+ *
+ * [hasPermission] 以函数注入而非持有 Context：权限可能在采集途中被撤销，所以每次
+ * 出错时都要重新查，同时本类保持不依赖 Android Context，便于测试。
  */
 class PitchRepository(
-    private val configProvider: () -> TunerConfig = { TunerConfig.Default }
+    private val configProvider: () -> TunerConfig = { TunerConfig.Default },
+    private val hasPermission: () -> Boolean = { true }
 ) : PitchSource {
 
     private val pitchChannel = Channel<PitchResult>(
@@ -116,13 +123,21 @@ class PitchRepository(
                 try {
                     newDispatcher.run()
                 } catch (e: Exception) {
-                    pitchChannel.trySend(PitchResult.Error(e))
+                    // 采集途中失败，最常见的是麦克风被其他应用抢走
+                    emitError(e, "Audio dispatch failed mid-capture")
                 }
             }
         } catch (e: Exception) {
             stopListening()
-            pitchChannel.trySend(PitchResult.Error(e))
+            emitError(e, "Failed to open the microphone")
         }
+    }
+
+    private fun emitError(cause: Throwable, context: String) {
+        val error = classifyPitchError(cause, hasPermission())
+        // 原先这些异常被静默丢弃，出问题时无从排查
+        Log.w(TAG, "$context: $error", cause)
+        pitchChannel.trySend(PitchResult.Error(error))
     }
 
     @Synchronized
@@ -134,8 +149,10 @@ class PitchRepository(
         if (activeDispatcher != null) {
             try {
                 activeDispatcher.stop()
-            } catch (_: Exception) {
-                // Dispatcher shutdown is best effort; its audio stream is closed by the dispatcher.
+            } catch (e: Exception) {
+                // 关闭是尽力而为，音频流由 dispatcher 自行关闭；但不再静默，否则
+                // "麦克风没被释放" 这类问题在日志里查不到任何线索
+                Log.w(TAG, "Dispatcher stop failed; the stream is closed by the dispatcher", e)
             }
         }
     }

@@ -1,5 +1,9 @@
 package xyz.sakulik.hertz.ui
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,13 +27,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import xyz.sakulik.hertz.R
+import xyz.sakulik.hertz.data.PitchError
 import xyz.sakulik.hertz.ui.components.IN_TUNE_CENTS
 import xyz.sakulik.hertz.ui.components.KeepScreenOn
 import xyz.sakulik.hertz.ui.components.NoteDisplay
@@ -45,6 +52,7 @@ fun PitchScreen(
     onOpenSettings: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     var showClearRecordDialog by rememberSaveable { mutableStateOf(false) }
 
     // 采集时保持屏幕常亮：用户举着手机唱歌，没有触摸事件，屏幕会自己变暗锁屏
@@ -74,8 +82,12 @@ fun PitchScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (uiState.hasError) {
-            MicErrorBanner(onRetry = { viewModel.startListening(isUserAction = true) })
+        uiState.error?.let { error ->
+            MicErrorBanner(
+                error = error,
+                onRetry = { viewModel.startListening(isUserAction = true) },
+                onOpenAppSettings = { context.openAppSettings() }
+            )
         }
 
         TunerDial(
@@ -172,20 +184,54 @@ fun PitchScreen(
     }
 }
 
+/**
+ * 按故障类型给出对得上的说明与操作：权限被撤销时重试毫无意义，得跳系统设置；
+ * 被占用时重试才有希望。
+ */
 @Composable
-private fun MicErrorBanner(onRetry: () -> Unit) {
+private fun MicErrorBanner(
+    error: PitchError,
+    onRetry: () -> Unit,
+    onOpenAppSettings: () -> Unit
+) {
+    val messageRes = when (error) {
+        PitchError.PermissionRevoked -> R.string.mic_error_permission
+        PitchError.DeviceBusy -> R.string.mic_error_busy
+        PitchError.InitFailed -> R.string.mic_error_init
+        is PitchError.Unknown -> R.string.mic_error_unknown
+    }
+
     Text(
         text = stringResource(R.string.mic_error_title),
         style = MaterialTheme.typography.titleMedium
     )
     Text(
-        text = stringResource(R.string.mic_error_message),
-        style = MaterialTheme.typography.bodyMedium
+        text = stringResource(messageRes),
+        style = MaterialTheme.typography.bodyMedium,
+        textAlign = TextAlign.Center
     )
-    OutlinedButton(onClick = onRetry) {
-        Text(text = stringResource(R.string.btn_retry))
+    Spacer(modifier = Modifier.height(8.dp))
+
+    if (error == PitchError.PermissionRevoked) {
+        OutlinedButton(onClick = onOpenAppSettings) {
+            Text(text = stringResource(R.string.btn_open_settings))
+        }
+    } else if (error.isRetryable) {
+        OutlinedButton(onClick = onRetry) {
+            Text(text = stringResource(R.string.btn_retry))
+        }
     }
     Spacer(modifier = Modifier.height(16.dp))
+}
+
+/** 打开本应用的系统设置页，供用户手动恢复被撤销的麦克风权限。 */
+private fun Context.openAppSettings() {
+    startActivity(
+        Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", packageName, null)
+        )
+    )
 }
 
 @Composable
