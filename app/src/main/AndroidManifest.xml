@@ -11,10 +11,13 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Hertz">
+        <!--
+            刻意不锁定方向：两个界面都可垂直滚动，横屏与平板下内容不会被裁切。
+            旋转会重建 Activity，但 ViewModel 存活，音域读数不丢；历史记录本就在磁盘上。
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="portrait"
             android:theme="@style/Theme.Hertz">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
