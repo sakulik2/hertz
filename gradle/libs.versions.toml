@@ -4,7 +4,7 @@ agp = "9.2.0"
 kotlin = "2.2.10"
 
 # Compose BOM governs every androidx.compose.* artifact, so those get no explicit version.
-composeBom = "2024.05.00"
+composeBom = "2026.09.00"
 
 androidxCore = "1.19.0"
 androidxLifecycle = "2.11.0"
