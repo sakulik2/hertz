@@ -61,6 +61,15 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 独立 applicationId，使开发版与已安装的正式版共存：
+            // 两者签名不同，同包名安装会以 INSTALL_FAILED_UPDATE_INCOMPATIBLE 失败，
+            // 而卸载正式版会连带删掉用户已记录的音域
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            // 刻意不改 app_name：两者在启动器里同名，只以包名区分
+        }
+
         release {
             // R8 开启后必须在真机上重新验证音高检测：混淆最可能打断的
             // 正是那个跨包名的手写音频桥
