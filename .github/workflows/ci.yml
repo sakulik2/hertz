@@ -70,7 +70,9 @@ jobs:
         if: steps.signing.outputs.store-file != ''
         run: |
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk
+          # 用 glob 而非固定文件名：产物名含版本号，改版本号不该连带改 CI
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          "$APKSIGNER" verify --print-certs "$APK"
 
       # 密钥材料不留在 runner 上，即便后续步骤失败也要删
       - name: Remove decoded keystore

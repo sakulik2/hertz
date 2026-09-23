@@ -64,7 +64,9 @@ jobs:
       - name: Verify release signature
         run: |
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk
+          # 用 glob 而非固定文件名：产物名含版本号，改版本号不该连带改 CI
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          "$APKSIGNER" verify --print-certs "$APK"
 
       - name: Remove decoded keystore
         if: always()
@@ -79,15 +81,19 @@ jobs:
             app/build/outputs/apk/release/*.apk
             app/build/outputs/mapping/release/mapping.txt
 
-      # 草稿状态发布，正文和上架时机由人决定
+      # 草稿状态发布，正文和上架时机由人决定。
+      # 只挂 APK：mapping.txt 是一张 w8 -> AppContainer 的完整对照表，
+      # 公开它等于把 R8 的混淆效果作废，且用户用不到它，只有排查崩溃时才需要。
+      # 它仍在上一步的 artifact 里（本仓库公开，故 artifact 亦可公开下载，
+      # 且 90 天过期）——要长期保留请另存私有副本，那一版的崩溃栈只能靠它还原。
       - name: Create draft release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
           gh release create "$GITHUB_REF_NAME" \
             --draft \
             --title "$GITHUB_REF_NAME" \
             --notes "见 CHANGELOG.md。构建来自 $GITHUB_SHA。" \
-            app/build/outputs/apk/release/app-release.apk \
-            app/build/outputs/mapping/release/mapping.txt
+            "$APK"

@@ -96,6 +96,18 @@ android {
     }
 }
 
+// 产物名带上版本号：app-release.apk 这种名字在下载目录里分不出是哪一版，
+// 而崩溃报告要配对的正是特定版本的 APK 和 mapping.txt。
+// versionName 已含 debug 的 -debug 后缀，故无需再拼 buildType。
+// 不加架构维度：未配 splits，包是 universal 的，四个 ABI 的 .so 合计不到 30 KB。
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            output.outputFileName.set("hertz-${output.versionName.get()}.apk")
+        }
+    }
+}
+
 dependencies {
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
