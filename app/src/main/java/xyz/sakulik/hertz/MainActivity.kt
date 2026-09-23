@@ -8,15 +8,18 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,18 +33,24 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import xyz.sakulik.hertz.ui.PitchScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            // 与 themes.xml 保持一致：该主题承诺黑色窗口背景与浅色状态栏图标，
+            // 因此 Compose 必须使用深色配色，否则启动时会黑白闪烁。
+            MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen()
+                    // targetSdk 35 起系统强制边到边显示，需自行避让状态栏与导航栏
+                    Box(modifier = Modifier.safeDrawingPadding()) {
+                        MainScreen()
+                    }
                 }
             }
         }
@@ -71,6 +80,14 @@ fun MainScreen() {
                 )
             } ?: false
         )
+    }
+
+    LifecycleResumeEffect(context, activity) {
+        hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        shouldShowRationale = activity?.let {
+            ActivityCompat.shouldShowRequestPermissionRationale(it, Manifest.permission.RECORD_AUDIO)
+        } ?: false
+        onPauseOrDispose { }
     }
 
     val launcher = rememberLauncherForActivityResult(
